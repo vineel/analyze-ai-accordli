@@ -1,56 +1,58 @@
-# Overview
-Accorldli is a b2b app for lawyers in various segments:
-* independent practioners
-* in-house legal counsel
-* law firms
+# Platform Overview
 
-## User Management Structure
-Because of our wide variety of customer segments, we are going to need a fairly complex user structure that can handle large organizations, but also individuals.
-Organization: a company or org (required)
-    Department: a group within the org. One org may have many departments. (optional)
-        User: an individual human, who may be part of 1 department, and is always part of 1 organization.
-    
+Accordli is a business-to-business legal technology platform designed for use by lawyers and legal professionals across multiple customer segments, including:
 
-## Pricing
-Our product burns tokens in large quantities, as part of it's essential functionality. To make this feasible, we must tie our pricing to usage. However, that the granularity of usage must be intuitive to our customers, so they can predict and control their spend.
+- Independent practitioners
+- In-house legal departments
+- Law firms
 
-To achieve this, we are planning to charge "per contract" in tiers. Here's an example system:
+The Platform must support a range of customer profiles, from solo users to large organizations with multiple legal teams, departments, administrators, and billing arrangements.
 
-### Independent Practioners
-Tier 1: Pro
-    $200/month
-    10 contract analyses
-    unlimited reports and memos
+---
 
-Tier 2: Gold
-    $400/month
-    25 contract analyses
-    unlimited reports and memos
+# User and Account Structure
 
-Extra Contract Packs
-    $100 per 10 contracts
-    Expire in 1 year
+Because Accordli serves both individual practitioners and larger institutional customers, the Platform must support a flexible user management model capable of accommodating both simple and complex organizational structures.
 
-## Billing
-Must register a credit card (or PayPal) and are billing every month on the day of their signing.
-If they cancel, their account is active until the last day of the period.
-If they request a refund, they may get an automatic refund in the first 7 days of the period, if the have analyzed 2 or fewer contracts.
+## Core Account Hierarchy
 
-### Teams
-Tier 2: Small Team of 3 lawyers
-    $600/month
-    3 seats
-    40 contract analyses across group
-    unlimited reports and memos
-    Team Dashboard
+### Organization
 
-Tier 3: Large Team of 10 lawyers
-    $2000/month
-    10 seats
-    130 contract analyses across group
-    unlimited reports and memos
-    Team Dashboard
+An **Organization** represents the primary customer account within Accordli. Every user must belong to exactly one Organization.
 
-Enterprise Tier
-    They must call. It will be a custom combination of seats, contract analyses, and Team Dashboard
+An Organization may represent, for example:
+
+- A solo legal practitioner
+- A law firm
+- A corporate legal department
+- A business entity purchasing access for legal or contracting personnel
+
+An Organization is required for all accounts.
+
+### Department
+
+A **Department** represents an optional subdivision within an Organization.
+
+Departments may be used to group users by legal team, practice area, business unit, office, client group, or other internal structure.
+
+An Organization may have zero or more Departments.
+
+### User
+
+A **User** represents an individual human authorized to access the Platform.
+
+Each User must belong to exactly one Organization. A User may also belong to one Department within that Organization, where departmental grouping is enabled or applicable.
+
+Initial model:
+
+```text
+Organization
+    Department (optional)
+        User
+```
+or
+```text
+Organization
+    User
+```
 
