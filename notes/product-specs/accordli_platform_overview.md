@@ -85,7 +85,7 @@ An **Agreement Review Credit** represents the analysis of one contract or agreem
 - **Included Outputs:** Unlimited reports and memoranda for analyzed contracts
 
 
-#### Extra Contract Pack
+#### Extra Agreement Review Credits
 
 - **Price:** $100
 - **Included Usage:** 10 additional Agreement Review Credits
@@ -96,7 +96,7 @@ Unused Agreement Review Credits in an Extra Contract Pack expire one year after 
 
 #### Billing Terms
 
-Customers must provide and maintain a valid payment method, such as a credit card or other supported payment method.
+Customers must provide and maintain a valid payment method, such as a credit card, PayPal or other supported payment method.
 
 Subscriptions are billed monthly in advance. The customer’s billing date is based on the date on which the subscription is activated, unless otherwise specified in the customer’s order form or applicable agreement.
 
