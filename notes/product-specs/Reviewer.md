@@ -48,3 +48,15 @@ A ReviewRun -- aka "run" -- is one multi-part process that runs on the queue. Di
 4. This is an embryonic product, so we are optimizing for flexibility. JSONB is our friend.
 5. Prompts will be stored as go templates in the git repo. They will be uploaded to the database for runtime.
 6. River will be the queue.
+
+
+# ChatGPT
+* Yes, that is what I had in mind. The Review is the object that the web ux works with. The ReviewRun is the state machine to manage the queue. 
+* I like your retry model
+* I understand that the prefix won't cross vendors, but in normal use it should help.
+* Does Azure do the prefixing like Anthropic does on the same models?
+* I agree with your field split between simple and jsonb
+* Yes I agree about the Finding (stable + details)
+* I'm concerned about conflating "user-visible status messages" and "important technical progress touchpoints". It's bit me before.
+* I think if a couple of lenses fail, we'll let them fail and give the user a "Retry" button on the ux. (But we'll retry according to our algo first.)
+* Once a Review has run, the Matter is locked. You can't upload new docs or agreements.
