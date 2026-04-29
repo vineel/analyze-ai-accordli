@@ -108,6 +108,6 @@ Retrying a failed lens does not create a new ReviewRun.
 - **Lens output format**: JSONL, buffered in memory until the lens completes
 - **Finding storage**: stable fields as columns, variable content as JSONB
 - **Prefix storage**: TEXT/JSONB field on the ReviewRun row (may be several hundred KB for large contracts)
-- **Prompts**: Go templates in the git repo, uploaded to the database for runtime
+- **Prompts**: Go templates in the git repo. Read and hydrated at runtime.
 - **Flexibility**: JSONB is preferred over rigid schemas while the product is evolving
 - **Matter lock**: Once a ReviewRun has been initiated against a Matter, the Matter is locked
