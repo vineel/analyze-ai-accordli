@@ -417,15 +417,20 @@ An **append-only event log** of every change to a customer's prepaid ARC balance
 
 ```
 credit_ledger
-  id              uuid    PK
-  org_id          uuid
-  delta           int                  -- +N for a pack purchase, -1 per ARC consumed
-  reason          enum                 -- pack_purchase | consumption | expiration | refund | adjustment
-  source          text                 -- 'stripe' | 'review_run' | 'manual_adjustment'
-  source_id       text                 -- payment_intent_id or review_run_id
-  expires_at      timestamp            -- only meaningful on positive (purchase) rows
-  idempotency_key text    UNIQUE
-  created_at      timestamp
+  id               uuid    PK
+  org_id           uuid
+  delta            int                  -- +N for a pack purchase, -1 per ARC consumed
+  reason           enum                 -- pack_purchase | consumption | expiration | refund |
+                                        --   adjustment | monthly_quota_grant
+  source           text                 -- 'stripe' | 'review_run' | 'manual_adjustment'
+  source_id        text                 -- payment_intent_id, review_run_id, etc.
+  source_grant_id  text                 -- on consumption rows: which Stripe Credit Grant
+                                        --   the ARC was drawn from (mirrors Stripe's
+                                        --   priority-ordered consumption); null on others.
+                                        --   Required for refund-of-pack attribution (§14.4).
+  expires_at       timestamp            -- only meaningful on positive (grant) rows
+  idempotency_key  text    UNIQUE
+  created_at       timestamp
 ```
 
 **Balance read:**
@@ -886,11 +891,383 @@ Still open:
 In rough priority order, post-second-pass:
 
 1. **Pick the path** for the prototype window: Stripe-only-with-Billing-Credits OR Lago-Cloud-free. Both are now defensible; Stripe-only is the lower-vendor-surface default. Team decision.
+
+   1. Vineel: I'm convinced that MVP (solo practioners) + Phase 1 (Teams) should be Stripe-only (no lagos or orb.)
+
 2. **Spec the renewal-grant handler** (if Stripe-only): on `invoice.created`, ensure the org has a Credit Grant for the new period covering plan-included ARCs.
+
+   1. Vineel: Yes, spec it
+
 3. **Spec the refund-of-pack handler**: define our policy for partial-consumption refunds and write the Credit Grant Expire flow.
+
+   1. Vineel: Yes, spec it
+
 4. **Spec the plan-change handler**: included-ARC math when going Pro → Gold (or any direction); proration_behavior choice; downgrade-at-period-boundary scheduling.
+
+   1. Vineel: Let's defer this for now. We can always handle this manually in Stripe via customer support.
+
 5. **Sketch the webhook handler in Go** as a prototype: signature verification + dedupe + River-job dispatch. ~150 lines; smoke-tests the pattern.
+
+   1. Vineel: You can use terse psuedocode. We don't need go level of detail yet.
+
 6. **Get a written sales-tax classification opinion** — still standing; tax advisor work, not engineering.
+
+   1. Vineel: Can you clearly state the opinion we need to ask for?
+
 7. **Set up two Stripe accounts** (staging + prod) once we begin building, to avoid mixed audit logs from day one.
+
+   1. Next week.
+
 8. **Design the in-app plan-and-billing UX**: current plan card, ARC usage gauge, pack purchase CTA, upgrade flow, cancel flow (deep-link to portal). Likely deserves its own design doc.
+
+   1. Defer
+
+---
+
+## 13. Renewal-grant handler — spec
+
+**Purpose.** On every billing-period rollover for every active subscription, ensure the org has a Credit Grant on its Stripe Customer covering its plan's monthly included ARCs, and mirror that into our local `credit_ledger`. Without this handler, included ARCs don't exist in Stripe's view and customers get charged metered overage from ARC #1 of every month.
+
+### 13.1 Trigger
+
+`invoice.created` webhook is the right hook. Fires ~1 hour before period end (Stripe-controlled), well before the new period actually rolls over.
+
+`invoice.upcoming` is too early (fires days ahead, may never finalize). `customer.subscription.updated` fires for too many unrelated reasons.
+
+### 13.2 Logic (pseudocode)
+
+```
+on invoice.created webhook:
+  invoice = event.data.object
+  if invoice.subscription is null: return     # one-off invoice (e.g. pack purchase)
+  if invoice.billing_reason != 'subscription_cycle': return
+                                              # only fire on natural renewals,
+                                              # not upgrades / corrections / first invoices
+
+  org    = lookup_org_by_stripe_customer(invoice.customer)
+  plan   = org.current_plan
+  period = { start: invoice.period_start, end: invoice.period_end }
+
+  if grant_exists_for(org, period): return    # idempotent
+
+  grant = stripe.CreditGrants.create(
+    customer        = invoice.customer,
+    amount          = plan.included_arcs,
+    category        = 'paid',                 # not 'promotional'
+    priority        = 100,                    # lowest — drains last;
+                                              # purchased packs default to 50,
+                                              # so packs drain first
+    expires_at      = period.end,             # quota expires at period end
+    applicability_config = {
+      scope: { price_type: 'metered',
+               prices: [METERED_ARC_PRICE_ID] }
+    },
+    metadata        = { org_id: org.id,
+                        period_id: period.id,
+                        kind: 'monthly_quota' },
+    idempotency_key = f"{org.id}:{period.id}:quota"
+  )
+
+  insert credit_ledger (
+    org_id           = org.id,
+    delta            = +plan.included_arcs,
+    reason           = 'monthly_quota_grant',
+    source           = 'stripe',
+    source_id        = grant.id,
+    expires_at       = period.end,
+    idempotency_key  = f"{org.id}:{period.id}:quota"
+  )
+```
+
+### 13.3 Properties to verify
+
+- **Idempotent on webhook redelivery.** Stripe `idempotency_key` matches the local one; second delivery is a no-op on both sides.
+- **Idempotent on plan changes.** A mid-period upgrade fires `customer.subscription.updated`, *not* `invoice.created` for cycle. The renewal grant for the existing period was already created at the prior renewal. The Pro→Gold delta-of-quota question is the deferred manual-runbook scenario (§15).
+- **Quota grant priority is *lowest*.** Older expiring packs drain first (they expire sooner). The monthly quota expires at period end — wasting it on this month's quota draws over a pack that the customer paid extra for.
+- **No grant created if subscription is canceled / unpaid.** `invoice.created` doesn't fire on canceled subs; this is implicit.
+
+### 13.4 Failure modes
+
+| Failure                                  | Detection                                                | Recovery                                                                  |
+|-----------------------------------------|----------------------------------------------------------|---------------------------------------------------------------------------|
+| Stripe API error during grant create    | Webhook returns 5xx; Stripe retries up to 3 days         | Eventually succeeds; reconciliation cron flags org as missing-grant       |
+| Local DB write succeeds, Stripe call fails | Webhook returns 5xx                                      | Stripe retries; idempotency keys make second attempt safe                |
+| Webhook missed entirely (Stripe outage) | Reconciliation cron diff (ledger vs Stripe Credit Grants) | Backfill grant; alert on >24h drift                                       |
+| Quota grant created, customer downgrades next day | Manual support runbook (§15)                            | Expire over-granted portion; create new grant matching new plan          |
+
+### 13.5 Edge cases not handled by this spec
+
+- **First subscription period.** First invoice after sign-up has `billing_reason='subscription_create'`, not `'subscription_cycle'`. Add a separate case (or call Credit Grants API directly from the sign-up flow). Note for the sign-up implementation.
+- **Plan changes** that should affect the in-progress quota grant. Handled manually via §15.
+- **Trials** — not in current pricing spec.
+
+---
+
+## 14. Refund-of-pack handler — spec
+
+**Purpose.** When a customer is refunded for a previously-paid credit pack, our `credit_ledger` and the corresponding Stripe Credit Grant must reflect that the credits are no longer valid. Stripe does *not* auto-expire the grant (§9.1); we handle this end-to-end.
+
+### 14.1 Policy decision required first
+
+The hard question: **what happens when a partially-consumed pack is refunded?** Three options:
+
+| Option | Refund semantics                                                          | Customer experience                       | Notes                              |
+|--------|----------------------------------------------------------------------------|-------------------------------------------|------------------------------------|
+| A      | Refund only allowed if pack is **100% unused**                             | Hard "no" if even 1 ARC consumed          | Lowest abuse risk                  |
+| B      | **Prorated refund**: customer gets back $(unused/total) × purchase price; consumed ARCs kept | "We'll refund what you didn't use"        | Math is straightforward             |
+| C      | **Full refund regardless** of consumption; we eat the consumed value       | "Sorry, here's all your money back"       | Highest abuse vector                |
+
+**Decision (confirmed by Vineel, 2026-04-30): Option A is the self-serve default; Option B is available only via support intervention with audit log. Option C reserved for case-by-case exceptions.**
+
+This aligns with the existing 7-day refund policy (≤2 contracts analyzed). Option A is the rule that the self-serve refund button enforces; Option B is what support reaches for to be generous in a specific situation.
+
+### 14.2 Trigger
+
+`charge.refunded` webhook, filtered to charges that originated from a credit-pack purchase.
+
+How to identify pack purchases:
+- At purchase time we set `metadata.purpose='credit_pack'`, `metadata.org_id`, `metadata.pack_size` on the PaymentIntent.
+- The `charge.refunded` event lets us read this metadata via the parent PaymentIntent.
+
+(Subscription-invoice refunds — usually credit notes — are a different code path, out of scope here.)
+
+### 14.3 Logic (pseudocode, Option A + B-via-support)
+
+```
+on charge.refunded webhook:
+  charge = event.data.object
+  pi     = stripe.PaymentIntents.retrieve(charge.payment_intent)
+  if pi.metadata.purpose != 'credit_pack': return
+
+  org      = lookup_org_by_stripe_customer(charge.customer)
+  pack_row = credit_ledger.find(source='stripe',
+                                source_id=pi.id,
+                                reason='pack_purchase')
+  if pack_row is null:
+    alert("refund for unknown pack purchase"); return
+
+  consumed = sum(credit_ledger.delta where
+                 reason='consumption' and
+                 source_grant_id = pack_row.stripe_grant_id)   # see §14.4
+  unused   = pack_row.delta - abs(consumed)
+
+  # Option A check is enforced upstream (refund button disabled
+  # if consumed > 0). If we reach this handler with consumed > 0,
+  # support authorized an Option B refund. Either way: Stripe
+  # says these dollars are gone, so the credits backing them
+  # must be invalidated.
+
+  # 1. Mirror to our ledger.
+  insert credit_ledger (
+    org_id           = org.id,
+    delta            = -unused,
+    reason           = 'refund',
+    source           = 'stripe',
+    source_id        = charge.id,
+    idempotency_key  = f"refund:{charge.id}"
+  )
+
+  # 2. Expire the corresponding Stripe Credit Grant.
+  stripe.CreditGrants.expire(
+    pack_row.stripe_grant_id,
+    idempotency_key=f"expire:{charge.id}"
+  )
+
+  # 3. Log for audit if Option B territory.
+  if consumed > 0:
+    audit_log("partial_refund_with_consumption",
+              org=org.id, charge=charge.id,
+              consumed=consumed, refunded=unused)
+```
+
+### 14.4 Pack attribution — the subtle bit
+
+"Consumption was drawn from this pack" requires a rule: when a ReviewRun consumes 1 ARC and the org has multiple active Credit Grants, *which* grant did it draw from?
+
+Stripe's priority-ordered consumption (lower priority drains first) is the source of truth. Our local ledger has to mirror that ordering when we record consumption rows.
+
+**Implementation:** at Commit time, the consumption row records `source_grant_id` referencing whichever grant Stripe drew from. Discoverable by reading the invoice line items (or Credit Grants API) after Stripe applies them.
+
+This means **the consumption row schema needs an extra column, `source_grant_id`.** Worth adding now, while we're speccing — used by both the refund handler and per-pack reporting.
+
+### 14.5 Failure modes
+
+| Failure                                            | Detection                       | Recovery                                                          |
+|---------------------------------------------------|----------------------------------|-------------------------------------------------------------------|
+| Stripe Credit Grant Expire fails                   | Webhook 5xx, Stripe retries     | Idempotency keys; eventually succeeds                             |
+| Pack consumed beyond unused (race)                 | `unused` goes negative          | Alert; manual reconciliation; we either owe the customer ARCs back or the consumption was illegitimate |
+| Partial refund issued without "support authorized" flag | Audit log review               | Operational policy issue, not a code bug                          |
+| Ledger says pack drained, Stripe still has unexpired grant | Reconciliation cron diff       | Expire the grant; investigate why it wasn't expired earlier       |
+
+### 14.6 Edge cases not handled
+
+- **Refund of a subscription invoice** including metered overage. Different code path (credit notes); out of scope.
+- **Chargebacks.** Different webhook (`charge.dispute.*`); we treat similarly to refunds but with a "disputed" status flag and may pre-emptively expire grants.
+
+---
+
+## 15. Manual plan-change support runbook
+
+**Context.** Plan-change automation is deferred (§12 #4). Customers requesting plan changes go through support, which executes the change in the Stripe dashboard. This is the runbook.
+
+### 15.1 Scope and authorization
+
+- **Who can do this:** named support engineers (initially Vineel, Tom). Tracked in an internal access list.
+- **Audit trail:** every plan change recorded in our admin tool with timestamp, customer, before/after plan, dollar impact, who executed.
+- **In scope:** Pro↔Gold (Solo); Small↔Large Team; Solo→Team upgrades.
+- **Out of scope:** Enterprise contract changes (separate workflow per §9.10 / §9.8).
+
+### 15.2 Pre-change checklist
+
+1. Confirm customer's request in writing (email is fine).
+2. Pull current state: org_id, current plan, current period dates, ARC usage this period, active credit packs.
+3. Decide effective date:
+   - **Upgrade:** effective immediately; prorated charge for upgrade delta.
+   - **Downgrade:** effective at next period boundary. (Avoids the "used 24 of 25 then downgraded to 10-ARC plan" gotcha.)
+4. Decide ARC handling for the in-progress period (upgrades only):
+   - Default: customer keeps unused ARCs from old plan; we add a `manual_top_up` Credit Grant for the new plan's ARC delta, prorated by remaining time in period.
+   - Alternative: zero out old quota, grant full new quota for the remainder.
+   - Communicate the choice explicitly to the customer.
+
+### 15.3 Steps in Stripe dashboard
+
+1. **Customer → Subscriptions** → open the active subscription.
+2. **Update subscription** → change the licensed-fee SubscriptionItem to the new plan's Price ID.
+3. **Proration:** select **"Prorate"** for upgrades, **"Don't prorate, schedule at next period"** for downgrades.
+4. **Save.** Stripe will:
+   - Upgrade: issue a proration invoice immediately (or roll into next invoice, per settings).
+   - Downgrade: schedule the change for the next period anchor.
+5. **Adjust the monthly quota Credit Grant** (upgrades only):
+   - Find existing `monthly_quota` grant on the customer (Credits section).
+   - Either (a) leave it; add new `manual_top_up` grant for the ARC delta prorated by remaining time, or (b) expire the old grant and create a new one for the full new quota for the remaining period.
+   - Set `expires_at = period_end`. Priority 100 (matches auto-renewal grant).
+6. **Update the local plan record** in our admin tool: set `org.current_plan_id` to the new plan version. **This is what entitlement reads — easy to forget.**
+
+### 15.4 Post-change
+
+- Email confirmation: new plan, effective date, dollar impact, new ARC quota, when it resets.
+- Verify in Stripe that the next renewal will hit the new plan's Price.
+- Verify in local DB that the renewal-grant handler (§13) will pick up the right plan at next cycle.
+- Log the change in admin audit trail.
+
+### 15.5 Common pitfalls
+
+- **Forgetting step 6** (the local DB update). Stripe-side is correct but our entitlement service still thinks they're on the old plan. Customer hits unexpected limits.
+- **Letting a downgrade apply immediately.** Always schedule downgrades at period boundary.
+- **Trying to expire still-valid packs on plan upgrade.** Don't — packs stay valid for 12 months across plan changes.
+
+### 15.6 When this runbook stops being enough
+
+- Volume hits ~5 plan changes/month → automate Pro↔Gold first (highest-volume case).
+- Repeated errors → tighten or automate.
+- Enterprise customers with custom terms → their own deal-by-deal flow, not this runbook.
+
+---
+
+## 16. Plan versioning approach (lightweight, Stripe-only)
+
+**Context.** With Lago/Orb off the table, we own plan versioning. The orb-deepdive correctly flagged this as a long-term risk: `if customer.plan_v == 1 { ... } else if v == 2 { ... }` everywhere is a poison pattern. Avoidable cheaply by being deliberate from day one.
+
+### 16.1 Principle
+
+**Never branch on plan version in code.** Plan attributes (monthly fee, included ARCs, seat count, feature flags) are *data*, looked up at runtime from a `plans` table. Code asks "what does this org's current plan allow?" and the answer comes from a row.
+
+### 16.2 Stripe side
+
+- **One Stripe Product per plan** (`Solo Pro`, `Solo Gold`, `Small Team`, `Large Team`). Stable across versions.
+- **Multiple Stripe Prices per Product**, one per pricing version.
+- **When pricing changes:** archive old Price (Stripe lets you do this without breaking existing subscribers), create new Price, point new sign-ups at it.
+- **Existing subscribers stay on their archived Price.** Stripe does not auto-migrate. Migration is an explicit operational decision.
+
+### 16.3 Our side
+
+```
+plans
+  id              uuid    PK
+  plan_key        text             -- 'solo_pro', 'solo_gold', etc. (stable)
+  version         int              -- 1, 2, 3, ...
+  stripe_product  text             -- prod_... (stable per plan_key)
+  stripe_price    text             -- price_... (per version)
+  monthly_fee     int              -- cents
+  included_arcs   int
+  seat_limit      int
+  features        jsonb            -- e.g. {team_dashboard: true, sso: false}
+  effective_from  timestamp
+  effective_until timestamp        -- null = currently sold version
+  UNIQUE(plan_key, version)
+```
+
+```
+organizations
+  ...
+  current_plan_id  uuid REFERENCES plans(id)
+  ...
+```
+
+`org.current_plan_id` points at a specific (plan, version) row. Existing customers keep pointing at their version forever unless we explicitly migrate them. New customers get the latest non-archived version.
+
+### 16.4 Code patterns
+
+```
+# Reading a customer's allowance — what code looks like everywhere
+plan = db.plans.get(org.current_plan_id)
+if usage_this_period >= plan.included_arcs:
+    charge_overage()
+
+# NOT this (poison pattern):
+if org.plan_version == 1: included = 10
+elif org.plan_version == 2: included = 12
+elif org.plan_version == 3: included = 15
+```
+
+The poison pattern is only avoidable if we go data-driven from row 1. The `plans` table costs ~20 lines on day one; retrofitting after 50 occurrences of `if version == ...` costs days.
+
+### 16.5 Pricing-change runbook (when it happens)
+
+1. Insert a new `plans` row: same `plan_key`, version+1, new amounts, new Stripe Price ID (created in dashboard or via API first).
+2. Set `effective_until` on the previous row to now.
+3. Update sign-up code to default to the new version (one-line config pointing at "latest by plan_key").
+4. Existing customers continue on old version; their `current_plan_id` doesn't change.
+5. Optional: send existing customers a "we're updating prices" email and offer migration.
+
+### 16.6 What this gets us for free
+
+- Old invoices remain reproducible — their plan version still exists.
+- A/B testing prices to a subset of new sign-ups is "10% of new orgs get version N+1."
+- Grandfather promises ("you keep this rate") are honored automatically.
+- A customer asks "what was my plan in March 2026?" — look up their `current_plan_id` history (audit log on org table).
+
+### 16.7 What it doesn't solve
+
+- Custom enterprise pricing (one-off Prices per customer). Goes in a separate `enterprise_terms` table, not `plans`.
+- Mid-version feature flag rollouts. Use feature flags via PostHog, not plan versions.
+- Cross-cutting changes affecting *all* customers (e.g., new abuse-prevention limit). Code-level constants are fine.
+
+---
+
+## 17. Tax-advisor opinion request — drafted question
+
+For when we engage a SaaS-experienced sales-tax advisor (suggested before $100K MRR, per §4.8). The question:
+
+> **Subject: Sales-tax classification for AI-assisted contract-review SaaS sold to legal professionals**
+>
+> We are a B2B SaaS company (US-based, Delaware C-corp). Our product is a web application that uses AI models to analyze legal contracts uploaded by users and produces written findings, summaries, and reports. Customers are primarily attorneys and law firms (solo practitioners, in-house teams, and small-to-mid-size firms) located in all 50 states. Pricing is a recurring monthly subscription with included usage credits, plus optional one-time credit-pack purchases.
+>
+> We need a written taxability opinion covering:
+>
+> 1. **Classification.** For sales-tax purposes, is our service most properly characterized as: (a) prewritten/canned software (SaaS), (b) a digital good or digital automated service, (c) an information service, (d) a data-processing service, (e) a non-taxable professional or consulting service, or (f) something else? We are not providing legal advice and are not a law firm; the AI produces analytical outputs that the customer's attorney evaluates and uses.
+>
+> 2. **State-by-state taxability map.** For each US state (and DC), is our service taxable under the classification above? Please flag states where the classification is ambiguous (e.g., Texas's 80%-of-data-processing rule, or states that distinguish "delivered electronically" SaaS from professional services). For ambiguous states, indicate which classification we should adopt and why.
+>
+> 3. **Customer-type effects.** Does selling to a law firm vs. an in-house legal department vs. a solo practitioner change the taxability analysis in any state? Are there exemption certificates we should be collecting (resale, government, nonprofit), and at what point in the sign-up flow?
+>
+> 4. **Registration triggers.** What economic-nexus thresholds apply, and at what cumulative sales volume per state should we register? We use Stripe Tax for monitoring but not registration.
+>
+> 5. **Bundled-pricing treatment.** Our subscription bundles "AI compute" with "report generation" with "stored documents." Does the bundling affect taxability in states that treat components differently?
+>
+> Deliverable: a written memo we can rely on for compliance and that we can show to enterprise customers' tax teams during procurement. We expect to revisit annually.
+
+The "AI-assisted but not legal advice" framing in (1) is the load-bearing distinction in some states between "taxable digital service" and "non-taxable professional service" — that's why it's worded carefully.
+
+   
 
