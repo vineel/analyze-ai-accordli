@@ -353,29 +353,40 @@ Putting the findings together, the simplest defensible MVP architecture is:
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ Accordli app (Go API + worker)                            │
-│  - usage_events (append-only, our source of truth)        │
-│  - credit_ledger (mirror of Stripe Credit Grants + ours)  │
-│  - billing_periods                                        │
-│  - entitlement service (real-time)                        │
-│  - Reserve / Commit / Rollback wrapper                    │
-│  - webhook handler (idempotent on Stripe event ID)        │
+│ Accordli app (Go API + worker)                           │
+│  - usage_events       (append-only, our source of truth) │
+│  - credit_ledger      (append-only; ours + mirror of     │
+│                        Stripe Credit Grants)             │
+│  - reservations       (mutable, TTL-bounded; in-flight   │
+│                        holds during a ReviewRun)         │
+│  - billing_periods                                       │
+│  - entitlement service (Reserve check =                  │
+│      ledger SUM(non-expired) - SUM(active reservations)) │
+│  - Reserve / Commit / Rollback wrapper                   │
+│  - webhook handler   (idempotent on Stripe event ID)     │
+│  - reconciliation cron (ledger ↔ Stripe Credit Grants)   │
 └────┬──────────────────────────────────────┬──────────────┘
      │ on Commit: meter event                │ webhook ingress
      │ on pack purchase: Credit Grant        │
+     │ on renewal: monthly quota Credit Grant│
      ▼                                       │
 ┌──────────────────────────────────────────────────────────┐
-│ Stripe                                                    │
-│  - Customer per Org                                       │
-│  - Subscription per Org                                   │
-│     • Item 1: licensed Price (monthly fee)                │
-│     • Item 2: metered Price → Meter "arc_usage"           │
-│  - Credit Grants (monthly quota + purchased packs)        │
-│  - Stripe Tax (auto)                                      │
-│  - Customer Portal (cancel + payment method only)         │
-│  - Checkout (sign-up + plan change + pack purchase)       │
+│ Stripe                                                   │
+│  - Customer per Org                                      │
+│  - Subscription per Org                                  │
+│     • Item 1: licensed Price (monthly fee)               │
+│     • Item 2: metered Price → Meter "arc_usage"          │
+│  - Credit Grants (monthly quota + purchased packs)       │
+│  - Stripe Tax (auto)                                     │
+│  - Customer Portal (cancel + payment method only)        │
+│  - Checkout (sign-up + plan change + pack purchase)      │
 └──────────────────────────────────────────────────────────┘
 ```
+
+Note: `reservations` is intentionally separate from `credit_ledger` — see §8.2.
+The ledger is the immutable accounting record; reservations are mutable lifecycle
+state for in-flight ReviewRuns. The entitlement service reads both inside one
+transaction at Reserve time so two parallel runs can't double-spend the last ARC.
 
 This is a Stripe-only MVP. **It does not pre-decide against Lago/Orb** — if we hit the migration triggers from the Orb deep-dive (custom enterprise, a second usage dimension, plan grandfathering pain, ledger volume), we add a billing engine in front of Stripe and demote Stripe to "payment rails only."
 
@@ -759,6 +770,39 @@ State thresholds vary widely:
 Important: **Stripe Tax does not register us in the state.** When alerted, *we* file paperwork with that state's department of revenue (timeline: a few weeks per state). This becomes operational drag once we're in 10+ states.
 
 For solo-lawyer customers in 25–30 states, we'll likely cross thresholds in 5–8 of them within year 1. Plan for the registration-paperwork operational load. ([Stripe — Monitor your obligations](https://docs.stripe.com/tax/monitoring))
+
+### 9.10 Net-30 invoicing for Enterprise — supported, with caveats
+
+Stripe Invoicing supports net-N terms cleanly. The mechanism is the **Subscription `collection_method` flag**:
+
+| `collection_method`    | Behavior                                                               |
+|------------------------|------------------------------------------------------------------------|
+| `charge_automatically` | Default. Stripe auto-charges the saved card on the invoice date.        |
+| `send_invoice`         | Stripe generates the invoice and emails a hosted-invoice URL. Customer pays via card / ACH / wire. Combined with `days_until_due=30` (or 60, 90) for net-N terms. |
+
+When `send_invoice` is set, Stripe:
+- Generates the invoice and emails it to the customer.
+- Hosts a payable invoice URL (card / ACH / wire as enabled).
+- Sends configurable reminder emails before and after the due date.
+- Marks the invoice `open` → `past_due` → `uncollectible` based on age and our config.
+- Lets us record out-of-band payments (e.g., mailed check) via the dashboard or API.
+
+The Quotes API (§9.8) auto-creates `send_invoice` subscriptions when an enterprise quote is accepted — so the deal flow is: Quote → customer accepts → Subscription with net-30 → first invoice issued.
+
+**Accordli mapping:**
+
+- Solo Pro / Solo Gold / Small Team / Large Team: stay on `charge_automatically`. Self-serve sign-up means card-on-file, monthly-in-advance.
+- **Enterprise: `send_invoice` with net-30 (or whatever the contract specifies).** B2B legal procurement will not accept autocharge for a signed-MSA contract. Net-30 is the table-stakes term; net-60 and net-90 occasionally come up.
+
+**Practical caveats:**
+
+1. **Net-30 means we extend credit.** If the customer doesn't pay, we eat it / send to collections / suspend service — and "suspend service" is operationally harder when there's a signed MSA. Standard B2B AR risk; Stripe doesn't insulate us. We should set internal policy on "how long past due before we suspend an enterprise customer" before the first deal.
+2. **Service continues during the 30 days.** Entitlement layer must allow ARC consumption *before* payment lands. Different posture from autocharge customers — for net-30 customers, payment status is decoupled from access until a configurable past-due threshold.
+3. **ACH settlement is 3–5 business days.** Money isn't instant; reconciliation cadence has to tolerate the lag.
+4. **Dunning shape differs.** Autocharge: "card declined, retry" (Smart Retries handles). Invoice: "they haven't paid, escalate" (reminder emails, then human follow-up). Both flow through `invoice.payment_failed` / `invoice.marked_uncollectible` webhooks; we want **different in-app UX** for each — no point dunning an enterprise customer like a self-serve solo who just needs to update their card.
+5. **Tax works the same.** Stripe Tax computes on the invoice regardless of collection method.
+
+**Implication for the platform spec:** the Enterprise tier diverges from self-serve in more places than just "case-by-case pricing." Commercial terms, payment shape, entitlement-during-grace policy, and dunning UX all branch. Worth being explicit when we expand the Enterprise section of `accordli_platform_overview.md`. ([Stripe — Billing collection methods](https://docs.stripe.com/billing/collection-method))
 
 ---
 
