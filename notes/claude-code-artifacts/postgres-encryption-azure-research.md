@@ -4,6 +4,23 @@ Living document. Research questions up top, findings appended as we go, decision
 
 Started: 2026-04-30.
 
+## Terminology — read this before the rest
+
+The word "customer" gets overloaded across three different things in this space. Pin it down once:
+
+| Term | Who holds the key | Granularity | Notes |
+|------|-------------------|-------------|-------|
+| **SMK** (service-managed key) | Microsoft | One service key, opaque to us | Default for Flex Server. "Customer" not in the picture. |
+| **CMK** (customer-managed key, Azure's term) | Us (Accordli, the Azure account holder) | Typically one key for the DB | "Customer" here means *Azure's* customer, i.e. us — not the law firms. |
+| **Per-Org / per-tenant keys** (application-layer) | Us, in our Key Vault | One data-encryption key per end-customer Organization | Independent of SMK/CMK. Lives at the envelope-encryption layer. |
+| **HYOK / BYOK** | The end customer (law firm), in *their* cloud | One key per end-customer Org, *controlled by them* | Enterprise upsell pattern. Ironclad ships this on a paid tier. |
+
+These are independent axes. Granularity (one key vs per-Org) is orthogonal to who holds them (us vs the end customer).
+
+When a lawyer on a security call asks "is the data encrypted with our key?", they almost always mean **HYOK**, not Azure CMK. Don't conflate the two in questionnaire answers.
+
+**Two independent axes, not one.** Storage-layer encryption (SMK or CMK) decides *who holds the master key for the database volume*. Application-layer envelope encryption decides *whether tenants are cryptographically isolated from each other inside the database*. CMK alone does not give per-tenant isolation — it just changes who holds the one shared key. Per-Org keys live one layer up, in the application, regardless of what's underneath. The two stack; we mix and match independently.
+
 ## Scope locked in
 
 These are the scoping answers we agreed on before starting research. Treat as fixed unless explicitly reopened.
