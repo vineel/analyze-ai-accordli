@@ -66,6 +66,8 @@ To accomplish this, Accordli will price usage primarily by **Agreement Review Cr
 
 An **Agreement Review Credit** represents the analysis of one contract or agreement through the Platform’s supported review workflows. Reports, memoranda, summaries, and related outputs generated from an analyzed contract may be included without additional per-output charges, subject to applicable fair-use or abuse-prevention limits.
 
+The customer is never charged for a Review the Platform fails to deliver. User-initiated retries inside an existing Review are free, and a Review that completes fewer than approximately 90% of its Lenses does not consume an ARC. See `Reviewer-v2.md` (ARC Consumption) for the operational rules.
+
 ---
 
 # Subscription Tiers
@@ -107,6 +109,8 @@ If a customer cancels a subscription, the account remains active through the end
 A customer may be eligible for an automatic refund during the first seven days of a billing period, provided that the customer has analyzed no more than two contracts during that billing period.
 
 Refund eligibility may be subject to additional abuse-prevention rules and may be modified for enterprise or custom arrangements.
+
+> _Status: under revision._ The current wording lets the refund window recur every billing period, which is an abuse vector (analyze two contracts in week one, refund, repeat next month). Likely revision: the refund is one-time per email address, restricted to solo-practitioner plans, and possibly granted only via support intervention rather than self-serve. Tracked in `notes/todo.md` (item 13).
 
 ---
 
@@ -154,3 +158,5 @@ Enterprise customers must contact Accordli for pricing and onboarding.
 # Content Ownership
 
 Matters are owned at the Department level. Organization administrators may view and administer all Matters within the Organization.
+
+> _Open design question._ Team plans share Agreement Review Credits across the entire Organization, but Matters live in a single Department. Cross-Department Matter visibility, contributor access, and pool-consumption fairness (one Department burning the firm's pool while another starves) are not yet designed. Tracked in `notes/todo.md` (item 10).

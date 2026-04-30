@@ -62,7 +62,7 @@ Organized roughly in the order they become load-bearing. "Buy" means use the Saa
 | Eval harness | **Promptfoo** (OSS) or Braintrust | Build a 20-contract regression set early |
 | Document parsing — `.docx` | OpenXML parsing in Go (your existing knowledge) | |
 | Document parsing — PDF (native + scanned) | **LlamaParse**, Reducto, or AWS Textract | Don't burn weeks on PDF extraction |
-| File storage | **Cloudflare R2** or **AWS S3** | R2 has no egress fees; S3 has the longer compliance pedigree |
+| File storage | **Azure Blob Storage** (Hot tier, ZRS) | Decided in `research/azure-proposal.md`. Original recommendation was R2/S3; superseded by the single-cloud Azure choice. |
 | Vector search (if/when needed) | pgvector (in your existing Postgres) | Avoid adding a new DB unless forced |
 
 ### Application Plumbing

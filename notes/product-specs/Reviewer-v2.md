@@ -18,7 +18,7 @@ The Review is the read model: it is what the web UX, reports, and user interacti
 A ReviewRun is the process object that manages the async execution of a Review. It is a state machine that runs on the queue. A Review may have multiple ReviewRuns over its lifetime (e.g. initial run, user-initiated retries of failed lenses).
 
 ### Lens
-A Lens is a prompt that examines the Matter documents from a specific angle and returns a set of Findings. Lenses are defined as Go templates stored in the git repo and uploaded to the database for runtime use.
+A Lens is a prompt that examines the Matter documents from a specific angle and returns a set of Findings. Lenses are defined as Go templates in the git repo. **The repo is canonical**; every LensRun records the git SHA of the template it used. Templates may be cached in the database at runtime for performance, but git is the source of truth for prompt content and versioning.
 
 ### Finding
 A Finding is one discrete issue or observation produced by a Lens. Findings have two parts:
@@ -100,6 +100,16 @@ When a ReviewRun ends in `partial` state, the UX shows a Retry option for each f
 
 Retrying a failed lens does not create a new ReviewRun.
 
+### ARC Consumption
+The customer is never charged for a Review the Platform fails to deliver. Customer delight is paramount; when we fail, we eat the cost.
+
+- **User-initiated lens retries are free.** A retry within the same Review does not consume an additional ARC, no matter how many times the user retries.
+- **Sub-90% completion is not chargeable.** If a ReviewRun ends in `partial` state with fewer than ~90% of its Lenses completed, the ARC reservation is rolled back and the user is not charged.
+- **Failed prefix step is not chargeable.** A ReviewRun that ends in `failed` state never consumes an ARC.
+- **Fully completed runs are charged once.** A `completed` ReviewRun consumes exactly one ARC; subsequent user-initiated retries inside that same Review remain free.
+
+This is a product-level commitment, not just an internal policy. It should be visible in the UX (e.g., when a partial run lands, surface "this Review will not be charged" alongside the retry CTA) and stated on the pricing page.
+
 ---
 
 ## Technical Notes
@@ -108,6 +118,6 @@ Retrying a failed lens does not create a new ReviewRun.
 - **Lens output format**: JSONL, buffered in memory until the lens completes
 - **Finding storage**: stable fields as columns, variable content as JSONB
 - **Prefix storage**: TEXT/JSONB field on the ReviewRun row (may be several hundred KB for large contracts)
-- **Prompts**: Go templates in the git repo. Read and hydrated at runtime.
+- **Prompts**: Go templates in the git repo. The repo is canonical; runtime DB caching is permitted but not authoritative. Every LensRun records the git SHA of the template it ran.
 - **Flexibility**: JSONB is preferred over rigid schemas while the product is evolving
 - **Matter lock**: Once a ReviewRun has been initiated against a Matter, the Matter is locked

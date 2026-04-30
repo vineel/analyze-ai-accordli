@@ -9,3 +9,9 @@ Things to Research & Open Questions
 7. Account Page - must be designed
 8. Purchase More Credits flow
 9. Sign Up flow (with plan choice and payment)
+10. Cross-Department Matter ownership / sharing in Team plans. Shared org-wide ARC pool + Department-owned Matters interact awkwardly; not yet designed.
+11. Matter lock + retry UX flow. Today the spec locks Matters once a ReviewRun starts; need a designed flow for "I want to upload an amendment after I see the findings."
+12. Solo practitioner Org/Dept — concrete data model. Are the rows literally there with hidden UX, or is there a special case in the access-control code?
+13. Refund policy revision. Current wording allows the refund window to recur monthly. Likely revision: one-time per email address, possibly solo-only, possibly support-intervention only.
+14. Verify Azure Foundry's `cache_control` semantics match the direct Anthropic API. The whole prefix-caching design and per-ARC cost math depend on this.
+15. WorkOS deep dive. What we get out of the box (AuthKit, Organizations, SSO/SCIM, audit logs) vs. what we have to build. Where the audit-log boundary lives between WorkOS-recorded events and our own `audit_events` table. Likely deserves its own `notes/research/workos-deepdive.md`.

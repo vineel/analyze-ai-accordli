@@ -59,7 +59,9 @@ We are explicitly *not* paying for multi-region failover, hot standbys, or 99.99
    Frontend (React/TS):  Azure Static Web Apps (Standard)
    Secrets:              Azure Key Vault
    LLM:                  Azure AI Foundry → Claude Sonnet 4.6
-                         (Helicone proxy in front for observability)
+                         (production: direct call from worker;
+                          Helicone proxy used in dev/staging only)
+   LLM failover:         Direct Anthropic API (Vendor B per Reviewer-v2)
    Auth:                 WorkOS AuthKit (hosted)
    Billing:              Orb (hosted) ← Stripe (payment processor)
    Email:                Resend
@@ -71,7 +73,11 @@ We are explicitly *not* paying for multi-region failover, hot standbys, or 99.99
    CI/CD:                GitHub Actions
 ```
 
-The hot path: a request hits Cloudflare → Container Apps API → enqueues a River job in Postgres → worker pulls the job, calls Helicone → Foundry (Claude) → writes results to Postgres + Blob → SSEs progress back. Orb gets a metered usage event on commit; WorkOS owns identity; Sentry/Grafana see everything via OTel.
+The hot path: a request hits Cloudflare → Container Apps API → enqueues a River job in Postgres → worker pulls the job, calls Foundry (Claude) directly → writes results to Postgres + Blob → SSEs progress back. Orb gets a metered usage event on commit; WorkOS owns identity; Sentry/Grafana see everything via OTel.
+
+Production traffic does **not** route through Helicone. Helicone retains prompts and responses by default, and contract content cannot live in a third-party logging gateway without breaking the day-one trust narrative ("contract bytes live in encrypted Blob and in process memory only"). Helicone is used in dev and staging for prompt iteration and eval observability, against synthetic/test contracts only. If at some point we need production-grade prompt observability, the answer is self-hosted Helicone inside our Azure tenant with redaction configured, not the hosted gateway.
+
+On vendor failover: the worker calls Foundry by default and falls back to the direct Anthropic API per the rules in `Reviewer-v2.md` (Failure & Retry). Both vendors are wired from day one; this is not a Phase 2 hardening item.
 
 ---
 
@@ -211,18 +217,44 @@ Notes:
 
 Single biggest variable cost. Azure Foundry list pricing for Claude Sonnet 4.6 matches Anthropic's public API pricing:
 
-- Input: ~$3 / 1M tokens
+- Input (uncached): ~$3 / 1M tokens
+- Cache write: ~$3.75 / 1M tokens (1.25× input)
+- Cache read: ~$0.30 / 1M tokens (0.10× input)
 - Output: ~$15 / 1M tokens
 
-**Per Agreement Review Credit (ARC):** assume one analysis = 30K input + 10K output tokens. That's `(30K × $3 + 10K × $15) / 1M = $0.09 + $0.15 = $0.24 / ARC`. With prompt caching on the contract clause-classifier system prompt (which we will use), input cost on cached portions drops 90% — call it **$0.20 / ARC** in steady state.
+**Per-ARC cost model.** Reviewer-v2 splits one analysis into a shared **prefix** (system prompt + contract + supplemental docs + Matter metadata) consumed by ~12 parallel **Lenses**. The prefix is several hundred KB — call it ~75K–150K tokens — and is written to Anthropic's prompt cache on the first lens call, then read by every subsequent lens. Each lens emits a JSONL response of findings. The cost of one Full Review therefore decomposes into:
 
-**Eval / dev / regression runs:** budget another ~30% on top of production token spend for prompt iteration, regression evals on the gold set, and internal testing.
+| Component | Per Review |
+|---|---|
+| Prefix cache write (once) | `prefix_tokens × $3.75/M` |
+| Prefix cache reads (11 lenses, one is the writer) | `11 × prefix_tokens × $0.30/M` |
+| Lens prompts (12 × ~1.5K uncached tokens) | `~$0.054` |
+| Lens output (12 × output_tokens × $15/M) | `12 × output_tokens × $15/M` |
 
-| Volume | Production ARC cost | + 30% dev/eval | Monthly LLM bill |
+Ranging the two unknowns (prefix size, average lens output):
+
+| Scenario | Prefix tokens | Output / lens | Per-ARC cost |
 |---|---|---|---|
-| 400 ARCs | $80 | $24 | **~$105** |
-| 800 ARCs | $160 | $48 | **~$210** |
-| 1,500 ARCs | $300 | $90 | **~$390** |
+| Low (small contract, terse findings) | 50K | 3K | **~$0.95** |
+| Mid (typical) | 100K | 5K | **~$1.66** |
+| High (large contract, verbose findings or extended thinking) | 150K | 8K | **~$2.55** |
+
+This is **5–13× higher than the prior `$0.20/ARC` estimate**, which assumed a flat 30K-input/10K-output single-call shape and did not model the fan-out of lenses against a large shared prefix. The mid case is the right number to plan margins around until we have measured production traffic.
+
+The model is sensitive to two assumptions worth verifying early:
+
+1. Foundry's `cache_control` semantics actually match the direct Anthropic API. If cache writes are charged differently (or caching isn't supported), the prefix-read line jumps from `$0.30/M` to `$3/M`, roughly doubling per-ARC cost. (Tracked in `notes/todo.md` item 14.)
+2. Average output per lens. Findings are structured JSONL, but extended-thinking output can balloon. Track this from day one in Helicone (dev/staging) and the worker's own metrics (production).
+
+**Eval / dev / regression runs:** budget another ~30% on top of production token spend for prompt iteration and regression evals on the gold set.
+
+**Failover (Vendor B = direct Anthropic):** same per-token pricing, billed against an Anthropic account rather than Azure. Failover traffic is expected to be a small fraction of total volume; budget impact is rounding error in normal operation, but capacity must exist (account, credentials, billing alerts) from day one.
+
+| Volume | Production ARC cost (mid) | + 30% dev/eval | Monthly LLM bill |
+|---|---|---|---|
+| 400 ARCs | $664 | $199 | **~$865** |
+| 800 ARCs | $1,328 | $398 | **~$1,725** |
+| 1,500 ARCs | $2,490 | $747 | **~$3,235** |
 
 We will configure Foundry's zero-data-retention commitment from day one and quote it on the trust page. Foundry billing rolls into the Azure invoice, which simplifies MACC accounting later.
 
@@ -273,10 +305,12 @@ The proposal here assumes we **do** use Orb because it was specified — and tha
 | **BetterStack** uptime | Free (10 monitors, 3-min) | $0 |
 | **PostHog** | Free (1M events, 5K replays) | $0 |
 | **Instatus** status page | Free (5 components) | $0 |
-| **Helicone** LLM gateway | Free up to 100K requests | $0 |
+| **Helicone** LLM gateway (dev/staging only) | Free up to 100K requests | $0 |
 | **Subtotal — observability** | | **~$26 / mo** |
 
 Free tiers will hold for 6+ months at this scale. Sentry's free tier (5K errors) is too thin for production; pay the $26.
+
+**PostHog session replay** is a hard "off" on any page that renders Matter content (contract text, findings, reports). Recording a lawyer's screen while they read a confidential agreement is the kind of thing that ends a sales cycle. Replay is enabled on marketing, signup, account, and admin pages only. Treat this as a P0 design constraint, not a configuration footnote.
 
 ### 4.6 Email, Domains, Misc
 
@@ -308,26 +342,26 @@ Add **~$30/mo** for Intune + 1Password from day one. The rest land in Phase 2.
 
 ## 5. Total Cost — Starter Scale, Steady State
 
-| Category | Low | Likely | High |
+| Category | Low (400 ARCs) | Likely (800 ARCs) | High (1,500 ARCs) |
 |---|---|---|---|
 | Azure infra | $185 | $205 | $245 |
-| LLM via Foundry | $105 | $210 | $390 |
+| LLM via Foundry (mid per-ARC, +30% dev/eval) | $865 | $1,725 | $3,235 |
 | WorkOS | $0 | $0 | $375 |
 | Orb | $0 | $0 | $720 |
 | Observability | $26 | $26 | $26 |
 | Email + GitHub + misc | $10 | $20 | $30 |
 | Intune + 1Password | $30 | $30 | $30 |
-| **Total (excl. payment processing)** | **~$355** | **~$490** | **~$1,815** |
+| **Total (excl. payment processing)** | **~$1,115** | **~$2,005** | **~$4,660** |
 | Stripe processing fees (~3% of MRR) | varies | varies | varies |
 
-**Most likely realistic monthly bill in the first 6 months: ~$450–$550**, assuming Orb startup program acceptance and zero SSO connections live.
+**Most likely realistic monthly bill in the first 6 months: ~$1,100–$1,300**, assuming Orb startup program acceptance, zero SSO connections live, and ~400 ARCs/month.
 
-**Realistic month 12 bill** (one SSO customer live, Vanta engaged, Defender Standard, Orb on entry tier): **~$2,000–$2,400/mo**.
+**Realistic month 12 bill** (one SSO customer live, Vanta engaged, Defender Standard, Orb on entry tier, ~800 ARCs/month): **~$3,000–$3,500/mo**.
 
 For context, at the assumed scale:
 - 20 orgs on a blended ~$500/mo plan = ~$10K MRR
-- COGS at the likely line above is ~5–6% of revenue
-- That leaves healthy gross margin even before MACC discounts
+- COGS at the likely line above is ~11–13% of revenue (driven almost entirely by LLM tokens)
+- Still healthy gross margin, but materially tighter than the prior estimate. This is the line item that benefits most from prompt-engineering discipline (smaller prefixes, terser lens outputs) and from MACC-tier discounts on Foundry once we have an enterprise agreement.
 
 ---
 
@@ -338,6 +372,7 @@ For context, at the assumed scale:
 ✅ **Auth that legal customers will accept** — MFA, SSO-ready, SCIM-ready, audit logs, password reset.
 ✅ **Subscription + metered + credit-pack billing** matching the Pro/Gold/Team plans in the spec.
 ✅ **Claude under your Azure invoice**, with zero data retention contractually committed.
+✅ **Two-vendor LLM failover** (Azure Foundry primary, direct Anthropic API fallback) per `Reviewer-v2.md`. Wired from day one; not deferred to Phase 2.
 ✅ **Day-one observability** — errors, traces, metrics, logs, uptime, and product analytics.
 ✅ **Security primitives needed for the Day-One Security Story** — encryption at rest/in transit, Key Vault, MFA, Defender, audit logs, data export, configurable retention.
 ✅ **A path to SOC 2 Type I in months 6–9** without re-architecting.
@@ -354,7 +389,6 @@ For context, at the assumed scale:
 ❌ **Dedicated tenant infrastructure.** Single shared cluster + DB. Dedicated stacks are an Enterprise-tier upsell, not a starter feature.
 ❌ **PDF OCR for scanned contracts** is *not* in this budget. LlamaParse / Reducto / Azure Document Intelligence each add $50–$300/mo at this scale; pick one when the first scanned-PDF customer shows up.
 ❌ **Marketing site, blog, docs site.** The marketing site lives on Vercel/Cloudflare Pages (free) outside this estimate.
-❌ **A second LLM provider for failover.** Foundry → Claude is the only path; if Foundry has a regional outage, contract analysis is unavailable. Adding direct Anthropic + AWS Bedrock as fallbacks is a Phase 2 hardening item — Helicone makes the wiring trivial; the cost is operational complexity, not dollars.
 ❌ **eDiscovery, litigation hold, customer data subpoena tooling.** Manual procedures only at this stage. Lawyers will ask; the answer is "we will respond within X days via documented process."
 
 ---
@@ -364,14 +398,14 @@ For context, at the assumed scale:
 These are the load-bearing decisions baked into the numbers above. If any of them is wrong, redo the math.
 
 1. **Foundry Claude pricing tracks Anthropic public API pricing.** Verified true at time of writing; subject to MACC discounts later.
-2. **Prompt caching delivers ~90% input-token savings** on the system prompt and clause taxonomy. We will engineer for this from the first call (skill: `claude-api`).
+2. **Prompt caching delivers ~90% input-token savings** on cache reads (the prefix is read by 11 of 12 lenses). The first lens incurs a 1.25× cache-write premium on the prefix. The §4.2 cost model bakes this in. We will engineer for this from the first call. If Foundry's `cache_control` semantics turn out not to match the direct Anthropic API (`notes/todo.md` item 14), the per-ARC math roughly doubles.
 3. **Orb startup program acceptance.** If denied, switch to Stripe Billing for 6–12 months; the table's "high" column is the worst case.
 4. **Single region is acceptable for launch.** A buyer's security questionnaire might ask for DR posture; the answer is "documented BCP, geo-redundant backups in `Central US`, RTO 4h / RPO 1h, multi-region active-active on the Phase 4 roadmap."
 5. **No first-year customers require HIPAA, FedRAMP, or in-region EU residency.** If an EU lawyer is the first sale, add a `West Europe` deployment; that's roughly +$200/mo.
 6. **Two engineers manage everything.** No SRE, no dedicated security engineer. Vanta + Defender + GitHub Advanced Security carry the automation load.
 7. **Container Apps over App Service.** Container Apps wins on scale-to-low cost and Kubernetes-shaped ergonomics; App Service is only cheaper if you commit to a year-long reserved instance, which doesn't fit a starter.
 8. **Postgres Flexible Server Burstable B2s holds for ~6 months.** A 4 GiB DB with pgvector and ~1K analyses/mo is fine. Watch IOPS; the upgrade path to General Purpose is in-place.
-9. **Helicone is the LLM gateway**, not Portkey. Either works; Helicone has the more permissive free tier today and OSS self-host option. Decision is reversible.
+9. **Helicone is the dev/staging LLM observability tool**, not a production gateway. Production traffic calls Foundry directly. Helicone vs. Portkey is a reversible decision; we picked Helicone for its free tier and OSS self-host story (relevant if we later want a production observability path inside our Azure tenant).
 10. **No new analytics warehouse.** Postgres serves all reporting needs at this scale. A real warehouse (BigQuery / Snowflake / Fabric) is a Phase 3 question.
 
 ---
@@ -385,10 +419,10 @@ Concrete, in priority order — what to stand up before customer one:
 3. **CI/CD pipeline** (GitHub Actions → ACR → Container Apps).
 4. **WorkOS** project, AuthKit configured, Organizations as the customer model.
 5. **Orb** sandbox, plans modeled (Pro / Gold / Small Team / Large Team / Extra Contract Pack), Stripe linked.
-6. **Foundry** project, Claude model deployment, zero-retention commitment confirmed in writing, Helicone proxy in front.
+6. **Foundry** project, Claude model deployment, zero-retention commitment confirmed in writing. Worker calls Foundry directly in production; Helicone is wired into dev/staging only against synthetic test contracts. Verify `cache_control` semantics match the direct Anthropic API end-to-end (`notes/todo.md` item 14). Stand up the direct-Anthropic account for Vendor B failover at the same time.
 7. **Sentry, Grafana Cloud OTel pipeline, BetterStack monitors, PostHog, Instatus** — all wired before the first customer sees the app.
 8. **Application skeleton:** `usage_events`, `audit_events`, `billing_periods`, `credit_ledger` tables defined and emitting from day one (no enforcement yet).
 9. **Trust page** at `/security` answering the seven-point Day-One Security Story from the roadmap.
-10. **One end-to-end smoke test** that uploads a contract, runs a real Claude analysis, returns a report, and emits a Helicone log + Orb usage event — exercised every deploy.
+10. **One end-to-end smoke test** that uploads a contract, runs a real Claude analysis (against a synthetic test contract), returns a report, and emits an Orb usage event — exercised every deploy. The dev/staging variant of this test also produces a Helicone log; the production variant does not.
 
 That gets us to a defensible "ready to take a paying lawyer" state for under $500/mo, with every load-bearing piece in place to grow into SOC 2 readiness without re-platforming.
