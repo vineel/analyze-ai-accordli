@@ -46,24 +46,24 @@ Organized roughly in the order they become load-bearing. "Buy" means use the Saa
 
 | Problem | Recommendation | Notes |
 |---|---|---|
-| Subscription billing + invoicing | **Stripe Billing** to start; **Orb** when you outgrow it | Orb handles seat+included+overage+credits natively |
+| Subscription billing + invoicing | **Stripe Billing** to start; **Orb** when you outgrow it | Orb handles seat+included+overage+credits natively. But we can ship and grow with Stripe's native features. |
 | Sales tax | **Stripe Tax** | Do not roll your own |
 | Customer self-service (portal, payment method updates, invoices) | Stripe Customer Portal | Free with Stripe Billing |
-| Usage metering (long-term) | **Orb** or Metronome | Purpose-built for your model shape |
+| Usage metering (long-term) | **Orb** or Metronome | Purpose-built for your model shape. (Stripe has enough of this now.) |
 | Dunning / failed payment recovery | Stripe Smart Retries + your own emails | |
 
 ### AI Infrastructure
 
 | Problem | Recommendation | Notes |
 |---|---|---|
-| LLM API calls + fallback + cost tracking | **Helicone** or Portkey | Don't call providers directly from app code |
-| LLM provider routing | **Azure Foundry** for Claude (recommended) or direct Anthropic API | Foundry gives you Claude under your existing Azure billing/MACC, Entra ID auth on model endpoints, Azure Monitor for usage, and zero-data-retention commitments. Stack a thin gateway (Helicone) on top for prompt-level observability and caching. |
-| LLM observability (prompts/responses/latency) | **Langfuse** (OSS, self-host) or Helicone | Critical for "the analysis was wrong" debugging |
+| LLM API calls + fallback + cost tracking | **Helicone** or Portkey for dev/staging, direct calling for production. | Does logging and observability for LLM calls. Which is good, for dev/staging. Really bad for privacy in production. |
+| LLM provider routing | Primary Vendor<br />(A) **Azure Foundry** for Claude <br />Fallback Vendor (B) Anthropic API | Foundry gives you Claude under your existing Azure billing/MACC, Entra ID auth on model endpoints, Azure Monitor for usage, and zero-data-retention commitments. |
+| LLM observability (prompts/responses/latency) | **Langfuse** (OSS, self-host) or Helicone | Critical for "the analysis was wrong" debugging. Still might be really wrong for production privacy. |
 | Eval harness | **Promptfoo** (OSS) or Braintrust | Build a 20-contract regression set early |
-| Document parsing — `.docx` | OpenXML parsing in Go (your existing knowledge) | |
-| Document parsing — PDF (native + scanned) | **LlamaParse**, Reducto, or AWS Textract | Don't burn weeks on PDF extraction |
-| File storage | **Azure Blob Storage** (Hot tier, ZRS) | Decided in `research/azure-proposal.md`. Original recommendation was R2/S3; superseded by the single-cloud Azure choice. |
-| Vector search (if/when needed) | pgvector (in your existing Postgres) | Avoid adding a new DB unless forced |
+| Document parsing — `.docx` | Pandoc + custom GO | Written against our existing 14-doc corpus. |
+| ~~Document parsing — PDF (native + scanned)~~ | ~~**LlamaParse**, Reducto, or AWS Textract~~ | No PDF import for v1. We did a lot of custom fixes and workarounds for DOCX, and it still won't be right. |
+| File storage | **Azure Blob Storage** (Hot tier, ZRS) | This is MS S3. There's a config to do customer-key-encryption to make this compliant. |
+|                                               |                                                              |                                                              |
 
 ### Application Plumbing
 
