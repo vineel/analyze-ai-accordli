@@ -274,6 +274,21 @@ For starter scale, assume:
 
 **Monthly cost: $0–$375**, almost certainly **$0 for the first ~6 months**. Budget $250 starting around month 6 once the first enterprise deal lands.
 
+#### WorkOS vs. Entra ID — different problems
+
+WorkOS authenticates our **customers** into Accordli. It does not authenticate **us** into the SaaS tools we run our business on. Those are different problems and need different identity providers:
+
+| Who's logging in | Where they authenticate | Why |
+|---|---|---|
+| Customers (lawyers) | WorkOS / AuthKit | B2B SaaS identity, includes their SSO/SCIM, lives on the consumer side of identity |
+| Us (employees) | Microsoft Entra ID | Corporate IdP, fed into every SaaS we use, lives on the producer side |
+
+Use Entra ID as our internal IdP — it's already part of the Azure tenant, MFA enforced at the directory level, and every Azure resource defers to it natively. Then point every other SaaS tool's SSO at Entra ID: GitHub, Stripe, the WorkOS dashboard itself, Vanta, Sentry, Helicone, PostHog, Linear, Slack. This is the "pay the SSO tax on every SaaS tool" line — it costs real money (most vendors charge 50–100% more for the SSO tier) but it's how SOC 2 passes cleanly. Auditor asks "show me how Tom can access GitHub" → answer is "MFA-protected Entra ID login; offboarding is a single Entra account deactivation."
+
+WorkOS supports SSO into its own dashboard, so we eat our own dog food: log in to WorkOS via Entra. Don't make MFA exceptions for contractors or fractional roles — give them Entra accounts, scope-limit them, offboard via Entra. Skipping that breaks the audit trail.
+
+Google Workspace is a fine alternative if the team prefers Gmail/Drive day-to-day; the identity story is equivalent. The decision is about email/calendar preference, not identity quality.
+
 ### 4.4 Billing — Orb + Stripe
 
 Orb is a metering and billing engine; it does not process payments. Stripe sits behind Orb as the payment processor.
