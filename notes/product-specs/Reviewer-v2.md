@@ -97,6 +97,7 @@ When a ReviewRun ends in `partial` state, the UX shows a Retry option for each f
 - Creates a new River job within the same ReviewRun
 - Reads the existing prefix from the ReviewRun row
 - Follows the same vendor failover logic as the initial run
+- Does not require a new ARC reservation when the Review was already marked free because Accordli failed to deliver a robust review
 
 Retrying a failed lens does not create a new ReviewRun.
 
@@ -107,6 +108,7 @@ The customer is never charged for a Review the Platform fails to deliver. Custom
 - **Sub-90% completion is not chargeable.** If a ReviewRun ends in `partial` state with fewer than ~90% of its Lenses completed, the ARC reservation is rolled back and the user is not charged.
 - **Failed prefix step is not chargeable.** A ReviewRun that ends in `failed` state never consumes an ARC.
 - **Fully completed runs are charged once.** A `completed` ReviewRun consumes exactly one ARC; subsequent user-initiated retries inside that same Review remain free.
+- **Platform-failure retries stay free.** If the initial run is marked free because Accordli failed to deliver a robust review, later retries for failed Lenses inside that same Review remain free even if they eventually produce a complete Review. We do not retroactively charge the customer for our recovery work.
 
 This is a product-level commitment, not just an internal policy. It should be visible in the UX (e.g., when a partial run lands, surface "this Review will not be charged" alongside the retry CTA) and stated on the pricing page.
 

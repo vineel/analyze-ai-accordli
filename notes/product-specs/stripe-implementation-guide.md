@@ -165,6 +165,17 @@ reservations
   expires_at           timestamp  -- TTL, default now+30m
   created_at           timestamp
 
+review_billing_outcomes
+  review_id            uuid PK
+  org_id               uuid
+  outcome              enum   (pending | chargeable_committed |
+                                free_platform_failure |
+                                free_prefix_failure)
+  source_review_run_id uuid
+  reservation_id       uuid NULL
+  consumption_ledger_id uuid NULL
+  decided_at           timestamp NULL
+
 processed_webhooks
   event_id             text PK   -- Stripe event.id; dedupe key
   event_type           text
@@ -233,7 +244,11 @@ This is the core of the entitlement layer. Every ReviewRun is wrapped in this pa
 
 ### Reserve
 
-Called when a ReviewRun is initiated. In one transaction at `REPEATABLE READ`:
+Called when a ReviewRun is initiated, unless the Review already has a free platform-failure billing outcome.
+
+If the Review has `review_billing_outcomes.outcome IN ('free_platform_failure', 'free_prefix_failure')`, Reserve is skipped. The retry is allowed to run without checking available ARCs because Accordli already failed to deliver a robust Review and is eating the recovery cost.
+
+Otherwise, in one transaction at `REPEATABLE READ`:
 
 ```
 balance     = SUM(credit_ledger.delta WHERE org=O AND non-expired)
@@ -244,6 +259,10 @@ if available < 1:
 INSERT reservations (org=O, review_run=R, qty=1,
                      status='reserved',
                      expires_at = now() + 30m)
+UPSERT review_billing_outcomes (
+    review_id, org_id, outcome='pending',
+    source_review_run_id=R,
+    reservation_id=reservation.id)
 return reservation_id
 ```
 
@@ -251,7 +270,11 @@ The 30-minute TTL bounds crashed-worker holds. A periodic sweep marks expired re
 
 ### Commit
 
-Called when the ReviewRun completes with ≥90% of lenses successful.
+Called when the ReviewRun completes with ≥90% of lenses successful, unless the Review was already marked free because of a platform failure.
+
+If `review_billing_outcomes.outcome IN ('free_platform_failure', 'free_prefix_failure')`, Commit does not write a `credit_ledger` consumption row and does not send a Stripe meter event. The retry results may complete the Review, but the Review remains free.
+
+For normal chargeable Reviews:
 
 ```
 BEGIN
@@ -259,11 +282,16 @@ BEGIN
   source_grant_id = stripe.determine_grant_for_consumption(...)
                     -- ask Stripe which grant the meter event will draw from;
                     -- in practice, mirror Stripe's priority-ordered selection
-  INSERT credit_ledger (
+  ledger_row = INSERT credit_ledger (
       org=O, delta=-1, reason='consumption',
       source='review_run', source_id=R,
       source_grant_id = source_grant_id,
       idempotency_key=R)
+  UPDATE review_billing_outcomes
+     SET outcome='chargeable_committed',
+         consumption_ledger_id = ledger_row.id,
+         decided_at = now()
+   WHERE review_id = ReviewID
 COMMIT
 
 stripe.Meters.createEvent(
@@ -285,16 +313,32 @@ UPDATE reservations SET status='cancelled' WHERE id=R
 -- no ledger row, no meter event: nothing happened
 ```
 
+The Review is also marked with a free billing outcome:
+
+```
+if prefix failed:
+    outcome = 'free_prefix_failure'
+else:
+    outcome = 'free_platform_failure'
+
+UPSERT review_billing_outcomes (
+    review_id, org_id, outcome, source_review_run_id,
+    reservation_id, decided_at)
+```
+
+Once a Review has a free failure outcome, all user-initiated retries inside that same Review bypass Reserve and can never create a later consumption row or Stripe meter event.
+
 ### Outcome matrix
 
-| ReviewRun outcome           | reservations row | credit_ledger row | Stripe meter event |
-|----------------------------|------------------|-------------------|--------------------|
-| Completed (≥90% lenses)     | committed        | -1 consumption    | yes                |
-| Partial (<90%)              | cancelled        | none              | no                 |
-| Failed (prefix step never ran) | cancelled    | none              | no                 |
-| Crashed worker (TTL expired) | expired (sweep) | none              | no                 |
+| Review outcome                                      | reservations row | review_billing_outcome | credit_ledger row | Stripe meter event |
+|-----------------------------------------------------|------------------|------------------------|-------------------|--------------------|
+| Initial run completed normally (≥90% lenses)         | committed        | chargeable_committed   | -1 consumption    | yes                |
+| Initial run partial (<90%)                           | cancelled        | free_platform_failure  | none              | no                 |
+| Initial run failed before prefix/lenses were usable   | cancelled        | free_prefix_failure    | none              | no                 |
+| Retry after free platform/prefix failure completes    | none or cancelled | unchanged free outcome | none              | no                 |
+| Crashed worker (TTL expired before outcome decided)   | expired (sweep)  | pending                | none              | no                 |
 
-User-initiated retries within the same Review do not Reserve again — they reuse the original reservation if it's still valid, or create a new one only if the prior was rolled back.
+User-initiated retries within the same Review do not consume another ARC. If the original run already committed an ARC, retries reuse that charge. If the original run was marked free because Accordli failed to deliver a robust Review, retries bypass Reserve and remain free even if they eventually complete the Review.
 
 ---
 

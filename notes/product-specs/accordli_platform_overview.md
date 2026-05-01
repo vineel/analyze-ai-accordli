@@ -66,7 +66,7 @@ To accomplish this, Accordli will price usage primarily by **Agreement Review Cr
 
 An **Agreement Review Credit** represents the analysis of one contract or agreement through the Platform’s supported review workflows. Reports, memoranda, summaries, and related outputs generated from an analyzed contract may be included without additional per-output charges, subject to applicable fair-use or abuse-prevention limits.
 
-The customer is never charged for a Review the Platform fails to deliver. User-initiated retries inside an existing Review are free, and a Review that completes fewer than approximately 90% of its Lenses does not consume an ARC. See `Reviewer-v2.md` (ARC Consumption) for the operational rules.
+The customer is never charged for a Review the Platform fails to deliver. User-initiated retries inside an existing Review are free, and a Review that completes fewer than approximately 90% of its Lenses does not consume an ARC. If Accordli fails to deliver a robust Review and later retries complete it, the recovery work remains free; Accordli does not retroactively charge the customer for fixing its own failed run. See `Reviewer-v2.md` (ARC Consumption) for the operational rules.
 
 ---
 
