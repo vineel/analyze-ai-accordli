@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accordli Analyze — Contracts for the AI Era</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Warm, Clio-adjacent palette: cream, ink, brass, sage. No purple. */
+    --ink: #24201c;
+    --ink-soft: #4b443c;
+    --paper: #fbf7ef;
+    --paper-warm: #f3eadc;
+    --paper-cool: #efe4d2;
+    --rule: #d7c8b6;
+    --rule-soft: #e6d9c8;
+    --blue: #b98754;
+    --blue-deep: #80613f;
+    --blue-light: #d7b180;
+    --blue-pale: #f1e2cf;
+    --muted: #746b61;
+    --muted-2: #9a8f82;
+    --sage: #5f8672;
+    --rose: #b96558;
+    --gold-soft: #ead6b8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 32px;
+    position: relative;
+    z-index: 2;
+  }
+
+  nav {
+    position: sticky;
+    top: 0;
+    background: rgba(251, 247, 239, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--rule-soft);
+    z-index: 100;
+    padding: 18px 0;
+  }
+
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+  }
+
+  .logo {
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .logo span {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+    color: var(--blue);
+    letter-spacing: -0.02em;
+  }
+
+  nav ul {
+    list-style: none;
+    display: flex;
+    gap: 32px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  nav ul a {
+    color: var(--ink);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  nav ul a:hover { color: var(--blue); }
+
+  .nav-cta {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 22px;
+    background: var(--ink);
+    color: var(--paper);
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .nav-cta:hover {
+    background: var(--blue);
+    transform: translateY(-1px);
+  }
+
+  .hero {
+    padding: 104px 0 84px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, #fbf7ef 0%, #f6efe4 100%);
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    right: -200px;
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(circle, rgba(185, 135, 84, 0.14) 0%, transparent 60%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -100px;
+    left: -100px;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(128, 97, 63, 0.10) 0%, transparent 60%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .eyebrow, .hero-eyebrow, .cta-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--blue);
+    background: var(--blue-pale);
+    padding: 8px 16px;
+    border-radius: 100px;
+    font-weight: 500;
+  }
+
+  .hero-eyebrow { margin-bottom: 32px; }
+  .eyebrow { margin-bottom: 24px; }
+
+  .pulse {
+    width: 6px;
+    height: 6px;
+    background: var(--blue);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .hero h1 {
+    font-weight: 700;
+    font-size: clamp(44px, 7vw, 88px);
+    line-height: 1.0;
+    letter-spacing: -0.045em;
+    margin-bottom: 32px;
+    max-width: 15ch;
+  }
+
+  .hero h1 em, .section-title em, .cta h2 em {
+    font-family: 'Instrument Serif', serif;
+    /* font-style: italic; */
+    font-weight: 400;
+    color: var(--blue);
+    letter-spacing: -0.01em;
+  }
+
+  .hero-sub {
+    font-size: 20px;
+    line-height: 1.5;
+    max-width: 61ch;
+    color: var(--ink-soft);
+    font-weight: 400;
+    margin-bottom: 38px;
+  }
+
+  .hero-sub strong { font-weight: 700; color: var(--ink); }
+
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    /* margin: 0 0 34px; */
+    margin: 0 0 34px 50px;
+  }
+
+  .flow-step {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--blue-deep);
+    /* background: var(--blue-pale); */
+    /* border: 1px solid rgba(185, 135, 84, 0.18); */
+    /* border-radius: 100px; */
+    padding: 9px 13px;
+    font-weight: 700;
+  }
+
+  .flow-arrow {
+    color: var(--muted-2);
+    font-size: 13px;
+  }
+
+  .hero-cta, .cta-submit-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 18px 32px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 16px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+
+  .hero-cta:hover, .cta-submit-link:hover {
+    background: var(--blue);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(128, 97, 63, 0.22);
+  }
+
+  .hero-cta-meta {
+    margin-top: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .glance {
+    padding: 64px 0;
+    background: var(--paper-warm);
+    border-top: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .glance-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 36px;
+  }
+
+  .glance-item .num {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 10px;
+  }
+
+  .glance-item .num em {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  .glance-item .label {
+    font-size: 14px;
+    color: var(--ink-soft);
+    line-height: 1.45;
+  }
+
+  section {
+    padding: 100px 0;
+    position: relative;
+  }
+
+  .section-title {
+    font-weight: 700;
+    font-size: clamp(34px, 4.5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    margin-bottom: 22px;
+    max-width: 18ch;
+  }
+
+  .section-lede {
+    font-size: 19px;
+    line-height: 1.5;
+    max-width: 64ch;
+    color: var(--ink-soft);
+    margin-bottom: 48px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 72px;
+    align-items: start;
+  }
+
+  .pull {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: clamp(28px, 3.5vw, 42px);
+    line-height: 1.25;
+    color: var(--ink);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  .pull em { color: var(--blue); }
+
+  .body-copy p {
+    color: var(--ink-soft);
+    line-height: 1.68;
+  }
+
+  .body-copy p + p { margin-top: 18px; }
+
+  .question-list {
+    margin-top: 30px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .question-list div {
+    background: var(--paper-cool);
+    border-left: 3px solid var(--blue);
+    border-radius: 10px;
+    padding: 16px 18px;
+    color: var(--ink-soft);
+    font-size: 15px;
+  }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--paper);
+    padding: 28px;
+    border: 1px solid var(--rule-soft);
+    border-radius: 12px;
+    transition: all 0.2s;
+  }
+
+  .card:hover {
+    border-color: var(--blue);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(10, 22, 40, 0.05);
+  }
+
+  .card-icon {
+    width: 36px;
+    height: 36px;
+    background: var(--blue-pale);
+    color: var(--blue);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  .card h3 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 9px;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+
+  .card p, .card li {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .card ul {
+    list-style: none;
+    display: grid;
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .card li {
+    padding-left: 18px;
+    position: relative;
+  }
+
+  .card li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--blue);
+  }
+
+  .dark {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .dark .eyebrow, .dark .cta-eyebrow {
+    color: var(--blue-light);
+    background: rgba(185, 135, 84, 0.14);
+  }
+
+  .dark .section-title, .dark .pull { color: var(--paper); }
+  .dark .section-title em, .dark .pull em { color: var(--blue-light); }
+  .dark .section-lede { color: rgba(255, 255, 255, 0.78); }
+
+  .dark-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  .dark-card {
+    background: var(--ink-soft);
+    border: 1px solid rgba(215, 177, 128, 0.20);
+    border-radius: 16px;
+    padding: 32px;
+  }
+
+  .dark-card h3 {
+    color: var(--paper);
+    font-size: 20px;
+    margin-bottom: 16px;
+    letter-spacing: -0.02em;
+  }
+
+  .dark-card p, .dark-card li {
+    color: rgba(255, 255, 255, 0.82);
+    font-size: 15px;
+    line-height: 1.62;
+  }
+
+  .dark-card ul {
+    margin-top: 18px;
+    display: grid;
+    gap: 9px;
+    list-style: none;
+  }
+
+  .dark-card li {
+    padding-left: 20px;
+    position: relative;
+  }
+
+  .dark-card li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--blue-light);
+  }
+
+  .warm { background: var(--paper-warm); }
+  .cool { background: var(--paper-cool); border-top: 1px solid var(--rule-soft); }
+
+  .details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+  details {
+    background: var(--paper);
+    border: 1px solid var(--rule-soft);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  details[open] { border-color: var(--blue); }
+
+  details summary {
+    list-style: none;
+    padding: 24px 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    transition: background 0.15s;
+  }
+
+  details summary::-webkit-details-marker { display: none; }
+  details summary:hover { background: var(--paper-cool); }
+
+  .summary-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+  }
+
+  .summary-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--blue);
+    letter-spacing: 0.1em;
+    font-weight: 500;
+    min-width: 28px;
+  }
+
+  .summary-title {
+    font-weight: 700;
+    font-size: 17px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+
+  .summary-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--blue-pale);
+    color: var(--blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+
+  details[open] .summary-icon {
+    transform: rotate(45deg);
+    background: var(--blue);
+    color: var(--paper);
+  }
+
+  .summary-icon::before { content: '+'; }
+
+  .details-body {
+    padding: 0 28px 24px 72px;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .details-body p + p { margin-top: 12px; }
+
+  .note {
+    grid-column: 1 / -1;
+    padding: 20px 28px;
+    background: var(--blue-pale);
+    border-radius: 12px;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .note strong { color: var(--blue); font-weight: 700; }
+
+  .note-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--blue);
+    letter-spacing: 0.1em;
+    background: var(--paper);
+    padding: 4px 10px;
+    border-radius: 100px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .privacy-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .privacy-grid .card { background: var(--paper); }
+
+  .cta {
+    background: linear-gradient(135deg, #24201c 0%, #3a3026 62%, #80613f 100%);
+    color: var(--paper);
+    padding: 118px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta::before {
+    content: '';
+    position: absolute;
+    top: -300px;
+    right: -200px;
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, rgba(215, 177, 128, 0.18) 0%, transparent 60%);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
+  .cta-content { max-width: 780px; position: relative; z-index: 2; }
+  .cta-eyebrow { margin-bottom: 28px; }
+
+  .cta h2 {
+    font-weight: 700;
+    font-size: clamp(36px, 5.5vw, 64px);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+    margin-bottom: 28px;
+  }
+
+  .cta h2 em { color: var(--blue-light); }
+
+  .cta-body {
+    font-size: 18px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.82);
+    max-width: 60ch;
+    margin-bottom: 40px;
+  }
+
+  .cta-submit-link {
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: none;
+  }
+
+  .cta-submit-link:hover {
+    background: var(--blue-light);
+    color: var(--ink);
+  }
+
+  .cta-fineprint {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.55);
+    max-width: 56ch;
+    margin-top: 16px;
+  }
+
+  footer {
+    background: var(--paper);
+    padding: 48px 0 32px;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .footer-grid {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+
+  .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .footer-tagline {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 16px;
+    color: var(--muted);
+    padding-left: 16px;
+    border-left: 1px solid var(--rule);
+  }
+
+  .footer-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+
+
+  /* Warm brand refinements */
+  h1, h2, h3, .logo, nav ul, .nav-cta, .hero-cta, .cta-submit-link {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .nav-cta, .hero-cta {
+    background: var(--ink);
+    border-radius: 999px;
+  }
+
+  .nav-cta:hover, .hero-cta:hover {
+    background: var(--blue-deep);
+  }
+
+  .cta-submit-link {
+    border-radius: 999px;
+    background: var(--blue-light);
+    color: var(--ink);
+  }
+
+  .cta-submit-link:hover {
+    background: var(--gold-soft);
+    color: var(--ink);
+  }
+
+  .card, details, .privacy-grid .card {
+    background: rgba(255, 253, 248, 0.88);
+  }
+
+  .dark-card {
+    background: rgba(75, 68, 60, 0.55);
+  }
+
+  .strong-word {
+    color: var(--blue-deep);
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .hero-eyebrow, .hero h1, .hero-sub, .flow, .hero-cta-wrap {
+    animation: fadeUp 0.8s ease-out backwards;
+  }
+  .hero-eyebrow { animation-delay: 0.05s; }
+  .hero h1 { animation-delay: 0.15s; }
+  .hero-sub { animation-delay: 0.3s; }
+  .flow { animation-delay: 0.38s; }
+  .hero-cta-wrap { animation-delay: 0.48s; }
+
+  @media (max-width: 1024px) {
+    .glance-grid { grid-template-columns: repeat(2, 1fr); gap: 32px; }
+    .split { grid-template-columns: 1fr; gap: 44px; }
+    .card-grid, .privacy-grid { grid-template-columns: repeat(2, 1fr); }
+    .details-grid, .dark-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 760px) {
+    .container { padding: 0 24px; }
+    nav ul { display: none; }
+    .nav-cta { display: none; }
+    .hero { padding: 64px 0 54px; }
+    section { padding: 72px 0; }
+    .card-grid, .privacy-grid { grid-template-columns: 1fr; }
+    .details-body { padding-left: 28px; }
+    .note { flex-direction: column; align-items: flex-start; }
+    .flow { align-items: flex-start; flex-direction: column; }
+    .flow-arrow { display: none; }
+    .footer-grid, .footer-brand { flex-direction: column; align-items: flex-start; }
+    .footer-tagline { padding-left: 0; border-left: none; }
+  }
+</style>
+
+<style>
+  /* vineel */
+  .strong-word {
+    color: #8a3a22;
+    font-weight: 800;
+  }
+  .hero-sub {
+    max-width: none;
+  }
+  .hero h1 {
+    color: var(--ink);
+    font-size: 3rem;
+    max-width: none;
+  }
+
+</style>
+</head>
+<body id="top">
+
+<nav>
+  <div class="container">
+    <a href="#top" class="logo" aria-label="Accordli">Accordli <span>Analyze</span></a>
+    <ul>
+      <li><a href="#problem">The shift</a></li>
+      <li><a href="#solution">How it works</a></li>
+      <li><a href="#use-cases">For lawyers</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+    </ul>
+    <a href="#trial" class="nav-cta">Join the Private Trial</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <h1>Are your <span class="strong-word">contracts</span> ready for the <span class="strong-word">AI era</span> of business?</h1>
+    <p class="hero-sub">Artificial Intelligence is reshaping the business landscape in real-time. New AI-related risks are emerging rapidly, along with new opportunities. <span class="strong-word">Accordli Analyze</span> helps you modernize your contracts by automatically applying expert review frameworks crafted by expert attorneys experienced in AI-related issues.</p>
+    <div class="flow" aria-label="Accordli Analyze workflow">
+      <span class="flow-step">Steps:</span>
+      <span class="flow-step">1. Upload agreement</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step">2. Review findings</span>
+      <span class="flow-arrow">→</span>
+      <span class="flow-step">3. Export memo</span>
+    </div>
+    <div class="hero-sub" style="margin-left:60px;color:var(--muted-2)"><i>No prompt engineering, chat, or AI expertise needed</i></div>
+    <div class="hero-cta-wrap">
+      <a href="#trial" class="hero-cta">Join the Private Trial →</a>
+    </div>
+  </div>
+</header>
+
+
+<section id="problem">
+  <div class="container">
+    <div class="split">
+      <div>
+        <div class="eyebrow">The shift</div>
+        <h2 class="section-title">Contracts now need a <em>new kind</em> of review.</h2>
+        <p class="pull">AI is no longer just a technology issue. It is becoming a commercial, operational, regulatory, privacy, IP, employment, procurement, and risk-allocation issue.</p>
+      </div>
+      <div class="body-copy">
+        <p>Ordinary business contracts may now contain exposure that was not obvious when the form was drafted.</p>
+        <p>A services agreement may not address whether AI tools can be used to perform the work. A confidentiality clause may not clearly restrict AI-based processing. An IP provision may not account for AI-generated output, model training, residual knowledge, or third-party AI systems. A data protection addendum may not match how vendors are actually using AI in their operations.</p>
+        <p>For lawyers, the challenge is not simply using AI to review contracts. The challenge is helping clients understand whether their existing contracts and templates are ready for the business world that AI is creating.</p>
+        <div class="question-list">
+          <div>Who may use AI systems?</div>
+          <div>What data may be submitted into them?</div>
+          <div>Can confidential information be used with third-party AI tools?</div>
+          <div>Who owns or can rely on AI-assisted output?</div>
+          <div>What representations, controls, notices, or audit rights are needed?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="warm">
+  <div class="container">
+    <div class="eyebrow">What changes</div>
+    <h2 class="section-title">The risk is not always where the word <em>AI</em> appears.</h2>
+    <p class="section-lede">AI-related issues often surface through familiar provisions: confidentiality, data use, IP ownership, subcontracting, audit rights, indemnity, limitation of liability, security, and compliance.</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">01</div>
+        <h3>AI regulatory exposure</h3>
+        <p>AI-related obligations are developing quickly across jurisdictions, industries, and customer expectations. Accordli Analyze helps surface those questions in the context of the agreement in front of you.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">02</div>
+        <h3>Contract template drift</h3>
+        <p>Many templates were written before AI became part of daily business operations. Others have been updated in fragments, with isolated AI language added without a full interaction review.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">03</div>
+        <h3>Client confidence</h3>
+        <p>Clients want to know whether they can use AI, whether their vendors can use AI, whether their data is protected, and whether their contracts support internal AI policies.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="solution" class="dark">
+  <div class="container">
+    <div class="eyebrow">Accordli Analyze</div>
+    <h2 class="section-title">Lawyer-guided AI contract review.</h2>
+    <p class="section-lede">Upload an agreement. Accordli applies curated review frameworks to the contract. You receive structured findings, contract excerpts, suggested areas of concern, and a memo you can use as the starting point for client advice.</p>
+    <div class="dark-grid">
+      <div class="dark-card">
+        <h3>The lawyer stays in control</h3>
+        <p>Accordli Analyze does not make decisions for you. It organizes the review. You decide what matters, what to ignore, what to escalate, what to revise, and what to tell the client.</p>
+      </div>
+      <div class="dark-card">
+        <h3>Expertise is included</h3>
+        <p>Accordli Analyze is not a generic chatbot. The review is guided by curated frameworks built around AI-related contract issues, so you do not need to start from a blank prompt box.</p>
+      </div>
+      <div class="dark-card">
+        <h3>Structured findings</h3>
+        <p>Each review produces findings tied to the agreement. Findings are organized so you can see the issue, the relevant contract language, why it may matter, and what action may be appropriate.</p>
+      </div>
+      <div class="dark-card">
+        <h3>Memo-ready output</h3>
+        <p>The output is designed to support professional review, internal discussion, and client communication — not merely generate loose commentary.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="use-cases">
+  <div class="container">
+    <div class="eyebrow">For lawyers</div>
+    <h2 class="section-title">Built for the way legal teams advise clients.</h2>
+    <p class="section-lede">Accordli Analyze is designed for lawyers who need to review real contracts, advise real clients, and keep up with a changing legal landscape.</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">IH</div>
+        <h3>For in-house counsel</h3>
+        <ul>
+          <li>Review vendor agreements for AI-related use of company data</li>
+          <li>Check customer contracts for AI-related obligations or restrictions</li>
+          <li>Identify gaps in confidentiality, IP, data use, and security provisions</li>
+          <li>Evaluate whether contracts align with internal AI policies</li>
+          <li>Prioritize which templates need attention first</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-icon">OC</div>
+        <h3>For outside counsel</h3>
+        <ul>
+          <li>Review client agreements for AI-related risks</li>
+          <li>Modernize contract templates for AI-era business practices</li>
+          <li>Prepare client memos on AI-related contract exposure</li>
+          <li>Support diligence in vendor, customer, and technology agreements</li>
+          <li>Offer a focused AI contract review service without building an internal toolset</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-icon">CM</div>
+        <h3>For contract modernization</h3>
+        <p>Many organizations will not solve this one agreement at a time. Accordli Analyze applies a consistent review framework across agreements so lawyers can identify patterns, prioritize changes, and advise clients with more confidence.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="warm" id="deliverables">
+  <div class="container">
+    <div class="eyebrow">Deliverables</div>
+    <h2 class="section-title">What you get from each review.</h2>
+    <p class="section-lede">The review is structured to help you move from general concern to specific contract language, practical judgment, and clear communication.</p>
+    <div class="details-grid">
+      <details open>
+        <summary>
+          <div class="summary-content"><span class="summary-num">01</span><span class="summary-title">Structured review findings</span></div>
+          <span class="summary-icon"></span>
+        </summary>
+        <div class="details-body">Accordli identifies AI-related contract issues and organizes them into clear findings. Each finding is designed to help you understand the issue, locate the relevant language, and decide what to do next.</div>
+      </details>
+      <details>
+        <summary>
+          <div class="summary-content"><span class="summary-num">02</span><span class="summary-title">Contract excerpts and issue context</span></div>
+          <span class="summary-icon"></span>
+        </summary>
+        <div class="details-body">Findings are connected to the agreement itself, so you are not reviewing abstract commentary. You can see the language that triggered the issue and evaluate it in context.</div>
+      </details>
+      <details>
+        <summary>
+          <div class="summary-content"><span class="summary-num">03</span><span class="summary-title">Suggested client-facing memo</span></div>
+          <span class="summary-icon"></span>
+        </summary>
+        <div class="details-body">Accordli produces a memo-style summary that can be used as a starting point for client advice. You can edit, refine, accept, reject, or expand the memo based on your own judgment.</div>
+      </details>
+      <details>
+        <summary>
+          <div class="summary-content"><span class="summary-num">04</span><span class="summary-title">Review frameworks built for AI issues</span></div>
+          <span class="summary-icon"></span>
+        </summary>
+        <div class="details-body">The system applies curated review frameworks that focus on the kinds of AI-related contract questions lawyers are now being asked to address.</div>
+      </details>
+      <div class="note"><span class="note-tag">WORKFLOW</span><span><strong>No prompt engineering.</strong> No complex AI setup. Upload the agreement, review the findings, and read the memo.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="split">
+      <div>
+        <div class="eyebrow">Different by design</div>
+        <h2 class="section-title">Not a blank chatbot. Not loose commentary.</h2>
+        <p class="pull">Accordli Analyze is a structured contract review workflow designed around lawyer-curated AI contract analysis.</p>
+      </div>
+      <div class="body-copy">
+        <p>Many lawyers have tried using general-purpose AI tools for contract review. They can be useful, but they also create serious problems for professional legal work.</p>
+        <p>They may produce inconsistent answers. They may miss issues unless prompted correctly. They may overstate conclusions. They may invent authority or reasoning. They may require the user to know exactly what to ask. They may create confidentiality and data-handling concerns.</p>
+        <p>Accordli is designed for repeatable review, legal judgment, client communication, and the specific contracting challenges created by AI adoption.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="privacy" class="cool">
+  <div class="container">
+    <div class="eyebrow">Confidentiality</div>
+    <h2 class="section-title">Privacy and confidentiality are designed in.</h2>
+    <p class="section-lede">Contracts are sensitive. Client policies are sensitive. Contract analysis is sensitive. Accordli Analyze is being built for confidential legal work.</p>
+    <div class="privacy-grid">
+      <div class="card">
+        <div class="card-icon">01</div>
+        <h3>Private workspaces</h3>
+        <p>Your contracts and review materials belong to your account. They are not mixed into a shared customer environment for model training or cross-customer analysis.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">02</div>
+        <h3>Encrypted and access-controlled</h3>
+        <p>Documents and analysis data are protected through encryption and access controls. Access is authenticated and tied to the appropriate account and user permissions.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">03</div>
+        <h3>No training on your data</h3>
+        <p>Your contract text, client policies, uploaded documents, and review content are not used to train foundation models.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">04</div>
+        <h3>Zero-retention model processing</h3>
+        <p>Where external model providers are used, Accordli is designed to use zero-retention processing so contract inputs are processed for the review and not retained by the model provider for training or reuse.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">05</div>
+        <h3>Audit trail</h3>
+        <p>Accordli is designed to support a full audit trail of review activity, including uploaded agreements, generated findings, memo outputs, and user actions.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">06</div>
+        <h3>Built for professional review</h3>
+        <p>The system is designed around the reality that lawyers must protect confidential materials while still working efficiently with modern tools.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="split">
+      <div>
+        <div class="eyebrow">The outcome</div>
+        <h2 class="section-title">From uncertainty to specific advice.</h2>
+      </div>
+      <div class="body-copy">
+        <p>Accordli Analyze helps lawyers move from: <strong>“Does this contract create AI-related risk?”</strong></p>
+        <p>to: <strong>“Here are the specific provisions that matter, here is why they matter, and here is what we should consider doing next.”</strong></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="trial" class="cta">
+  <div class="container">
+    <div class="cta-content">
+      <div class="cta-eyebrow"><span class="pulse"></span> Private trial</div>
+      <h2>Help shape contract review for the <em>AI era</em>.</h2>
+      <p class="cta-body">Accordli Analyze is currently in private trial. We are inviting a small group of lawyers to test the product, review the workflow, and help shape the next version.</p>
+      <a href="mailto:hello@accordli.com?subject=Accordli%20Analyze%20Private%20Trial" class="cta-submit-link">Join the Private Trial →</a>
+      <p class="cta-fineprint">For lawyers advising clients on commercial contracts, vendor agreements, technology transactions, data use, privacy, IP, procurement, or AI adoption.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a href="#top" class="logo">Accordli <span>Analyze</span></a>
+        <div class="footer-tagline">Contract review for the AI era.</div>
+      </div>
+      <div class="footer-meta">Private trial · 2026</div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
