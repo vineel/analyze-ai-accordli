@@ -89,6 +89,9 @@ Don't substitute synonyms (no "tenant" for Organization, no "analysis" for Revie
 - **Prefix** — the assembled system prompt + contract + supplemental docs + metadata that all Lenses in a ReviewRun share. Stored on the ReviewRun row; cached via Anthropic `cache_control`.
 - **Agreement Review Credit (ARC)** — the unit of paid usage. One ARC = one analyzed contract. Reports and memoranda derived from an analyzed contract are not separately charged.
 - **Vendor A / Vendor B** — A is Azure Foundry, B is direct Anthropic. Failover order.
+- **Scaffolding** — the permanent plumbing built around the app: auth, billing, queue, database, file storage, LLM client + vendor failover, Reviewer's runtime, observability, encryption posture, lifecycle, CI/CD, infra. Built once, kept across the Mocky → Analyze swap.
+- **Mocky** — codename for the throwaway stub app currently sitting inside the Scaffolding. A deliberately mocked-up product surface (signup, Matters, two stub Lenses, basic detail page) whose only job is to exercise the Scaffolding end-to-end.
+- **Analyze** — the real product app that will replace Mocky once the product team finalizes the spec. Same Scaffolding underneath; real Lens set and real UI.
 
 ## Open research questions
 

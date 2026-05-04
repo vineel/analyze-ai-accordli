@@ -1,10 +1,23 @@
-# Starter App — Build Plan
+# Scaffolding + Mocky — Starter Build Plan
 
-The starter app is the productization scaffold. It is intentionally trivial in its product surface and intentionally complete in its plumbing. The product team has not finished defining Reviewer; meanwhile every load-bearing subsystem we will need around Reviewer (auth, billing, queue, file storage, LLM failover, observability, encryption, soft delete, export) is already known. The starter exists so that those subsystems are already built, integrated, and exercised by the time Reviewer is ready to swap in.
+Three terms structure this plan. Use them precisely:
 
-The guiding rule: **the starter's product surface is throwaway; everything between the API edge and the persistence layer is permanent.** When Reviewer ships, the two starter Lenses are deleted, the Matter detail page is rewritten, and the rest of the stack stays.
+- **Scaffolding** — the permanent plumbing: auth (WorkOS), billing (Stripe), queue (River), database, file storage (Blob), LLM client + vendor failover, Reviewer's runtime (queue + Lens fanout + Prefix builder), observability, encryption posture, lifecycle (soft delete, export, hard delete), CI/CD, infra. Built once, kept forever.
+- **Mocky** — the throwaway stub app sitting in the middle of the Scaffolding. A deliberately mocked-up product surface (signup, Matters list, upload, two stub Lenses, a basic detail page) whose only job is to exercise every Scaffolding subsystem end-to-end. Lives in `/web` and the HTTP edge of `/api`.
+- **Analyze** — the real product app that will eventually replace Mocky once the product team finalizes the spec. Same Scaffolding underneath; different surface and a real Lens set.
 
-Companion documents: `Reviewer-v2.md` (target subsystem), `accordli_platform_overview.md` (account model, plans), `stripe-implementation-guide.md`, `workos-implementation-guide.md`, `postgres-encryption-guide.md`, and `claude-code-artifacts/starter-lens-prompts.md` (the two prompts the starter will run).
+The shape today, and after the eventual swap:
+
+```
+today:    [ Scaffolding ]  [ Mocky ]    [ Scaffolding ]
+later:    [ Scaffolding ]  [ Analyze ]  [ Scaffolding ]
+```
+
+The guiding rule: **Mocky and its two stub Lenses are throwaway; the Scaffolding around them is permanent.** When Analyze replaces Mocky, the two stub Lenses get deleted, the real Lens set drops into Reviewer's runtime, the per-review-type aggregator replaces the starter summary call, and Mocky's UI is rewritten as Analyze's UI. Everything else — every Scaffolding subsystem — stays.
+
+Reviewer is part of Scaffolding (its queue + fanout + Prefix builder + LLM client are permanent); the *Lens content* it runs is what evolves with the Mocky → Analyze swap.
+
+Companion documents: `Reviewer-v2.md` (the runtime spec for Reviewer-the-subsystem), `accordli_platform_overview.md` (account model, plans), `stripe-implementation-guide.md`, `workos-implementation-guide.md`, `postgres-encryption-guide.md`, and `claude-code-artifacts/starter-lens-prompts.md` (the two stub Lens prompts Mocky will run).
 
 ---
 
@@ -20,23 +33,29 @@ That is the entire product surface. No team plans, no invites, no SSO, no admin 
 
 ## 2. What gets swapped, what survives
 
-When Reviewer lands:
+When Mocky → Analyze happens:
 
-| Layer | Status |
+**Thrown away (Mocky-shaped):**
+
+| Layer | Why it goes |
 |---|---|
-| Two starter Lenses (`entities_v1`, `open_questions_v1`) | Deleted |
-| Matter detail UI | Rewritten |
-| Summary call | Replaced by Reviewer's per-review-type aggregator |
-| Prefix builder | Extended (new metadata, supplemental docs) — same shape |
+| Mocky's signup/Matters/upload/detail UI | Replaced by Analyze's real UI |
+| Two stub Lenses (`entities_v1`, `open_questions_v1`) | Replaced by the real Lens set |
+| Starter summary call | Replaced by Reviewer's per-review-type aggregator |
+
+**Kept and extended (Scaffolding):**
+
+| Layer | What happens |
+|---|---|
+| Reviewer runtime (queue + per-Lens job pattern + Prefix builder) | Stays; Prefix builder extended for new metadata + supplemental docs (same shape) |
 | `findings` table (narrow stable shape + JSONB details) | Stays |
 | `review_runs`, `lens_runs`, `matters`, `documents` tables | Stay |
-| River queue + per-Lens job pattern | Stays |
 | Vendor A→B failover | Stays |
 | WorkOS, Stripe, Postmark, PostHog, Helicone integrations | Stay |
 | Reserve / Commit / Rollback around a Run | Stays |
 | Encryption posture, RLS, audit log | Stay |
 
-If a piece of work doesn't survive the swap, it should be the smallest possible piece that proves the surrounding plumbing works. If it does survive, it deserves real care now.
+If a piece of work belongs in the "thrown away" bucket, it should be the smallest possible piece that proves the surrounding Scaffolding works. If it belongs in "kept," it deserves real care now.
 
 ---
 
@@ -487,7 +506,7 @@ These are non-blocking for Phase 0 but should be resolved before the phase that 
 
 ## 10. What "done" means for the starter
 
-When all eight phases are merged, we should be able to:
+When all eight phases are merged — the full Scaffolding stack with Mocky in the middle — we should be able to:
 
 - Sign up a new solo user with a real card on prod.
 - Have them upload a .docx, run two parallel Lenses against it with a verified prompt cache hit on call 2 and 3, see Findings persisted with stable + JSONB shape.
@@ -496,4 +515,4 @@ When all eight phases are merged, we should be able to:
 - Soft-delete their account, export their data, hard-delete on request.
 - Show a customer security reviewer the encryption posture and have it match the language in `postgres-encryption-guide.md`.
 
-At that point the surrounding system is real; the only thing missing is the product. When the product team finalizes Reviewer, we delete `lens.entities_v1` and `lens.open_questions_v1`, drop in the real Lenses, rewrite the Matter detail UI, and ship.
+At that point the Scaffolding is real; the only thing missing is Analyze. When the product team finalizes the spec, we delete Mocky — its UI, its two stub Lenses, the starter summary call — and drop Analyze (real UI, real Lens set, per-review-type aggregator) into the same Scaffolding. The Scaffolding doesn't move.
