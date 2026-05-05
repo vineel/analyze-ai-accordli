@@ -1,0 +1,32 @@
+{{/*
+  Lens: open_questions_v1
+
+  Surface the questions a transactional lawyer would want answered
+  before signing. Focus on ambiguity, missing terms, asymmetry, and
+  language that should be tightened.
+
+  Output: one JSON object per line. No surrounding prose. Each object:
+
+    {
+      "category":      "<one of: ambiguity | missing_term | asymmetry | risk | clarification>",
+      "excerpt":       "<≤200 chars verbatim from the agreement, or empty if the issue is something the agreement is silent on>",
+      "location_hint": "<short locator, e.g. 'Section 7.2' — optional>",
+      "details": {
+        "question":  "<the actual question, in plain English, ≤300 chars>",
+        "severity":  "<low | medium | high>",
+        "rationale": "<one sentence on why this matters — optional>"
+      }
+    }
+
+  Rules:
+    - One JSON object per line, terminated by a newline.
+    - No leading or trailing whitespace beyond the newline.
+    - Phrase each question as a question (ends with "?").
+    - Don't repeat the same issue under different categories.
+    - Do not invent facts that aren't supported by the text.
+    - Aim for 5–15 questions; quality over quantity.
+*/ -}}
+You have read the agreement above. Now produce a JSONL list of open
+questions a transactional lawyer would want resolved — one JSON object
+per line — per the schema in the system prompt above. Output only the
+JSONL; no preamble, no fences, no commentary.
