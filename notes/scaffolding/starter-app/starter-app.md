@@ -3,7 +3,7 @@
 Three terms structure this plan. Use them precisely:
 
 - **Scaffolding** — the permanent plumbing: auth (WorkOS), billing (Stripe), queue (River), database, file storage (Blob), LLM client + vendor failover, Reviewer's runtime (queue + Lens fanout + Prefix builder), observability, encryption posture, lifecycle (soft delete, export, hard delete), CI/CD, infra. Built once, kept forever.
-- **Mocky** — the throwaway stub app sitting in the middle of the Scaffolding. A deliberately mocked-up product surface (signup, Matters list, upload, two stub Lenses, a basic detail page) whose only job is to exercise every Scaffolding subsystem end-to-end. Lives in `/web` and the HTTP edge of `/api`.
+- **Mocky** — the throwaway stub app sitting in the middle of the Scaffolding. A deliberately mocked-up product surface (signup, Matters list, upload, two stub Lenses, a basic detail do source=wepage) whose only job is to exercise every Scaffolding subsystem end-to-end. Lives in `/web` and the HTTP edge of `/api`.
 - **Analyze** — the real product app that will eventually replace Mocky once the product team finalizes the spec. Same Scaffolding underneath; different surface and a real Lens set.
 
 The shape today, and after the eventual swap:
@@ -71,7 +71,7 @@ Locked decisions, applied to the starter:
 | Database | Azure Postgres Flexible Server, Burstable B2s, CMK-encrypted |
 | Queue | River (Postgres-backed) |
 | File storage | Azure Blob, Hot tier, ZRS, versioning enabled |
-| Document conversion | pandoc CLI in the worker container, Go post-processing |
+| Document conversion | `docx2md-go` (our own package), called in-process from the worker |
 | LLM (Vendor A) | Claude Sonnet 4.x via Azure AI Foundry, ZDR configured |
 | LLM (Vendor B) | Anthropic API direct |
 | LLM observability | Helicone (full bodies in dev/staging; **metadata-only in prod**) |
@@ -193,6 +193,7 @@ review_runs
 lens_runs
   id                  uuid pk
   review_run_id       uuid fk
+  organization_id     uuid fk             -- denormalized for RLS
   lens_key            text                -- 'entities_v1' | 'open_questions_v1'
   lens_template_sha   text                -- git SHA of the template
   status              text                -- pending | running | completed | failed
@@ -207,6 +208,7 @@ findings
   id                  uuid pk
   review_run_id       uuid fk
   lens_run_id         uuid fk
+  organization_id     uuid fk             -- denormalized for RLS
   lens_key            text                -- denormalized for indexing
   category            text                -- nullable; cross-Lens enum
   excerpt             text                -- nullable; ≤200 chars
@@ -227,7 +229,7 @@ audit_events            -- per workos-implementation-guide.md
 Notes:
 
 - `findings` carries `category` as the only stable enum; `kind` (Lens 1) and `severity` (Lens 2) live in `details` until product evidence justifies promoting one. This matches the agreed answer: keep the table stable through Lens churn.
-- Postgres RLS on `matters`, `review_runs`, `lens_runs`, `findings`, `documents`, scoped by `organization_id`, as a defense-in-depth layer behind the API's auth middleware.
+- Postgres RLS on `matters`, `review_runs`, `lens_runs`, `findings`, `documents`, scoped by `organization_id`, as a defense-in-depth layer behind the API's auth middleware. `organization_id` is denormalized onto `lens_runs` and `findings` so policies stay single-table; the alternative (policies that join up through `review_runs` → `matters`) was rejected as too expensive on the hottest read path. The API connects as a non-`BYPASSRLS` role and sets `app.current_org` per transaction; the Admin container connects as a separate `BYPASSRLS` role. Mocky's admin path is "connect as the bypass role," not "scope-as-Org" — we'll revisit the scoped-as-Org pattern (Pattern B from our discussion) for Analyze once we have operational experience with the bypass approach.
 - All sensitive content (markdown, prefix, findings) is stored as ordinary types at v1 — protected by Flex CMK + TLS + access controls. Application-layer encryption is on the deferred roadmap; column types are chosen so a future migration to `bytea` is not destructive.
 
 ---
@@ -254,7 +256,7 @@ The starter exercises Reserve/Commit/Rollback because Reviewer needs it. It does
 
 ### 6.3 Database (Azure Flex + River)
 
-**In starter:** Flex Server (Burstable B2s) with CMK in Accordli's Key Vault, TLS 1.3 floor, `pgaudit` enabled, least-privilege roles (one for the API, one read-only for analytics, one for migrations), River schema installed, daily logical backups in addition to Flex's native backups.
+**In starter:** Flex Server (Burstable B2s) with CMK in Accordli's Key Vault, TLS 1.3 floor, `pgaudit` enabled, least-privilege roles (`accordli_app` for the API/worker — RLS enforced; `accordli_admin` for the Admin container — `BYPASSRLS`; `accordli_migrate` for goose — `BYPASSRLS`; `accordli_analytics` read-only for ad-hoc/BI — RLS enforced with a permissive read policy), River schema installed, daily logical backups in addition to Flex's native backups.
 
 **Deferred:** read replicas, point-in-time-restore drills automation, application-layer envelope encryption, per-Org DEKs, Managed HSM.
 
@@ -268,9 +270,9 @@ The CMK is configured from Day 1, not retrofitted, because the security question
 
 ### 6.5 Document conversion
 
-**In starter:** `pandoc` binary baked into the worker container image. A `convert.docx_to_markdown` River job: reads the original from Blob, runs pandoc with the GFM target, post-processes in Go (strip empty headings, normalize whitespace, drop image references that didn't survive conversion), writes markdown to `documents.content_md`.
+**In starter:** the `docx2md-go` package (our own) called in-process from the worker. A `convert.docx_to_markdown` River job: reads the original from Blob, runs `docx2md-go`, post-processes in Go (strip empty headings, normalize whitespace, drop image references that didn't survive conversion), writes markdown to `documents.content_md`.
 
-**Deferred:** PDF input, OCR, multi-document Matters, image extraction, table normalization beyond pandoc's defaults.
+**Deferred:** PDF input, OCR, multi-document Matters, image extraction, table normalization beyond `docx2md-go`'s defaults.
 
 ### 6.6 LLM (Anthropic Claude via Foundry, with failover)
 
@@ -486,6 +488,7 @@ Not in the starter, by design:
 - Custom domains for tenants.
 - Session-replay analytics; PII-laden PostHog properties.
 - Self-serve admin UI; CLI is enough.
+- "Log in as Org X" admin pattern (staff connecting via the app role with `app.current_org` scoped to the customer's Org). Mocky uses a `BYPASSRLS` admin role; we'll evaluate the scoped pattern for Analyze once we've lived with the bypass approach.
 
 Each of these has a home in either Reviewer's roadmap or one of the implementation guides.
 
