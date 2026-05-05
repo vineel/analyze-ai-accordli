@@ -1,44 +1,38 @@
-# === OS ===
+# OS
 .DS_Store
 Thumbs.db
 
-# === IDEs ===
+# IDEs
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# === Environment ===
+# Environment
 .env
 .env.local
 .env.*.local
 
-# === Go backend (be/) ===
-/be/bin/
-/be/tmp/
-/be/vendor/
+# Go backend
+/api/bin/
+/api/tmp/
+/api/vendor/
+*.test
+coverage.out
 
-# === Frontend (fe/) — Vite + React + TS ===
-/fe/node_modules/
-/fe/dist/
-/fe/.tsbuildinfo
+# Frontend
+/web/node_modules/
+/web/dist/
+/web/.tsbuildinfo
+*.tsbuildinfo
+/web/coverage/
 
-# === Uploads / local file storage ===
-/uploads/
-be/storage/
+# Local file storage seam
+/var/
 
-# === Deploy build artifacts ===
-/devops/deploy/build/
-
-# === Logs ===
+# Logs
 *.log
 
-# === Claude worktrees ===
+# Claude worktrees
 .claude/worktrees/
-
-# === Test / coverage ===
-/be/coverage/
-/fe/coverage/
-coverage.out
-*.tsbuildinfo
