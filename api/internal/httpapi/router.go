@@ -14,11 +14,13 @@ import (
 
 	"accordli.com/analyze-ai/api/internal/infra/auth"
 	"accordli.com/analyze-ai/api/internal/infra/observability"
+	"accordli.com/analyze-ai/api/internal/infra/repo"
 )
 
 type Deps struct {
 	Auth    auth.Provider
 	Log     observability.Logger
+	Repos   *repo.Repos
 	Version string // git SHA, surfaced by /health
 }
 

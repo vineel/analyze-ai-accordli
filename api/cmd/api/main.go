@@ -14,7 +14,9 @@ import (
 
 	"accordli.com/analyze-ai/api/internal/httpapi"
 	"accordli.com/analyze-ai/api/internal/infra/auth"
+	"accordli.com/analyze-ai/api/internal/infra/db"
 	"accordli.com/analyze-ai/api/internal/infra/observability"
+	"accordli.com/analyze-ai/api/internal/infra/repo"
 	"accordli.com/analyze-ai/api/internal/solomocky"
 )
 
@@ -24,10 +26,25 @@ func main() {
 
 	loadEnvFile()
 
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL not set")
+	}
+
+	ctx := context.Background()
+	pool, err := db.Open(ctx, dsn)
+	if err != nil {
+		log.Fatalf("open db: %v", err)
+	}
+	defer pool.Close()
+	repos := repo.New(pool)
+
+	// Always idempotently seed the Mocky trio so a fresh DB is usable
+	// without an extra step. `make seed` and `-seed` short-circuit.
+	if err := solomocky.Seed(ctx, repos); err != nil {
+		log.Fatalf("seed: %v", err)
+	}
 	if *seed {
-		if err := solomocky.Seed(context.Background()); err != nil {
-			log.Fatalf("seed: %v", err)
-		}
 		fmt.Println("seed: ok")
 		return
 	}
@@ -45,6 +62,7 @@ func main() {
 	deps := &httpapi.Deps{
 		Auth:    authProvider,
 		Log:     logger,
+		Repos:   repos,
 		Version: gitSHA(),
 	}
 	handler := httpapi.NewRouter(deps)
