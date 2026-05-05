@@ -1,34 +1,34 @@
-{{/*
-  Lens: entities_v1
+You have read the agreement above. Extract concrete factual entities
+from it: parties, effective dates, term, governing law, monetary
+figures, and any other named entity that a transactional lawyer would
+want indexed.
 
-  Extract concrete factual entities from the agreement: parties,
-  effective dates, term, governing law, monetary figures, and any
-  other named entity that a lawyer would want indexed.
+Output: one JSON object per line, JSONL format. No surrounding prose,
+no markdown fences, no commentary.
 
-  Output: one JSON object per line. No surrounding prose, no Markdown
-  fences. Each object has the shape:
+Each object MUST conform to this exact schema:
 
-    {
-      "category":      "<one of: party | date | term | governing_law | money | obligation | other>",
-      "excerpt":       "<≤200 chars verbatim from the agreement>",
-      "location_hint": "<short locator, e.g. 'Section 3.1' — optional>",
-      "details": {
-        "label":     "<short human-readable name>",
-        "value":     "<the entity value as a string>",
-        "role":      "<optional context: 'licensor', 'licensee', 'effective', 'expiration', etc.>"
-      }
-    }
+{
+  "category":      "<one of: party | date | term | governing_law | money | obligation | other>",
+  "excerpt":       "<≤200 chars verbatim from the agreement>",
+  "location_hint": "<short locator, e.g. 'Section 3.1' — optional>",
+  "details": {
+    "label":     "<short human-readable name>",
+    "value":     "<the entity value as a string>",
+    "role":      "<optional context: 'licensor', 'licensee', 'effective', 'expiration', etc.>"
+  }
+}
 
-  Rules:
-    - One JSON object per line, terminated by a newline.
-    - No leading or trailing whitespace beyond the newline.
-    - Keep excerpts verbatim, ≤200 chars; truncate with an ellipsis if
-      the source is longer.
-    - If a field doesn't apply, omit it (don't emit nulls).
-    - Do not invent facts. If the agreement is silent on something,
-      do not emit a Finding for it.
-    - Aim for breadth: 5–25 entities is the typical range.
-*/ -}}
-You have read the agreement above. Now produce a JSONL list of factual
-entities — one JSON object per line — per the schema in the system
-prompt above. Output only the JSONL; no preamble, no fences, no commentary.
+Rules:
+- One JSON object per line, terminated by a newline.
+- Use exactly these top-level keys: category, excerpt, location_hint, details.
+- "category" is required and must be one of the enum values above.
+- Keep excerpts verbatim from the agreement, ≤200 chars; truncate with
+  an ellipsis if the source is longer.
+- Omit any optional field whose value isn't applicable (don't emit
+  null).
+- Do not invent facts; if the agreement is silent on something, do
+  not emit a finding for it.
+- Aim for breadth: 5–25 entities is the typical range.
+
+Output the JSONL now. No preamble.
