@@ -1,6 +1,10 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Accordli — Working Context for Claude
 
-This repo is the design workspace for **Accordli**, a B2B legal AI platform whose core subsystem is **Reviewer** — an agent that analyzes contracts and produces findings for lawyers. Today it holds specs only; the Go API + worker and React/TS frontend will eventually live in this same repo.
+This repo is the workspace for **Accordli**, a B2B legal AI platform whose core subsystem is **Reviewer** — an agent that analyzes contracts and produces findings for lawyers. It holds both the specs (`notes/`) and the working code: a Go API/worker (`api/`), a React/TS frontend (`web/`), Postgres migrations (`db/`), and Lens prompt templates (`prompts/`). The current app is **SoloMocky** — the throwaway Mocky surface running inside the permanent Scaffolding (see Glossary).
 
 ## Who you are working with
 
@@ -43,19 +47,83 @@ Don't impose a heavier template (ADR / RFC) unless asked.
 ## Repo layout
 
 ```
+api/                  Go module: HTTP API + in-process worker
+  cmd/api/main.go     entrypoint; wires seams + starts chi router on :8080
+  internal/core/      domain logic (matter, reviewrun orchestrator, lens, llm, finding, docconv)
+  internal/httpapi/   chi router, auth middleware, /matters handlers
+  internal/infra/     swappable seam impls: auth, billing, db, queue, repo, storage, observability
+  internal/docx2md/   vendored .docx → markdown preprocessor (shells out to pandoc)
+  internal/solomocky/ Mocky-only seed data + sample doc
+web/                  Vite + React 19 + TS frontend on :5173
+db/migrations/        goose SQL migrations (0001_init … 0004_run_summary)
+prompts/lens/         Lens templates (.tmpl) — sha1-hashed at load and recorded per LensRun
+prompts/summary/      summary template
+scripts/              reset_db.sh, seed.sh
+var/blob/             local LocalFSBlob storage (the file:// blobs the worker reads)
 notes/
-  todo.md                                      open research questions
-  contract-ai-saas-roadmap.md                  6–12 month build roadmap
+  todo.md                          open research questions
+  contract-ai-saas-roadmap.md      6–12 month build roadmap
+  scaffolding/starter-app/         current Mocky/SoloMocky build spec
   product-specs/
-    accordli_platform_overview.md              accounts, plans, pricing
-    Reviewer-v2.md                             current Reviewer design
-    not-current-thinking/                      superseded drafts — ignore unless asked
-  research/
-    azure-proposal.md                          starter-scale Azure cost + architecture
-    orb-deepdive.md                            Orb billing notes
+    accordli_platform_overview.md  accounts, plans, pricing
+    Reviewer-v2.md                 current Reviewer design
+    not-current-thinking/          superseded drafts — ignore unless asked
+  research/                        vendor deep-dives (Azure, Orb, etc.)
+  claude-code-artifacts/           output drop for the Claude Code Workflow rule below
 ```
 
 When two files disagree, prefer the one outside `not-current-thinking/` and the one with the later `vN` suffix, and flag the conflict.
+
+## Build, run, test
+
+All commands run from the repo root via the Makefile. The Makefile loads `.env` and exports it; `DATABASE_URL` must be set there.
+
+| Command | What it does |
+|---|---|
+| `make dev` | API (`go run ./cmd/api` from `api/`) + Vite dev server, concurrently. API on `:8080`, FE on `:5173`. |
+| `make dev-api` / `make dev-web` | Run one side only. |
+| `make migrate` / `make migrate-down` | goose up/down against `db/migrations` using `DATABASE_URL`. |
+| `make reset` | `scripts/reset_db.sh` then re-migrate. Drops and recreates `solomocky_dev`. |
+| `make seed` | `scripts/seed.sh` — also runs idempotently on every API start. |
+| `make test` | `go test ./...` from `api/`. |
+| `make lint` | `go vet ./...` (api) + `npx tsc --noEmit` (web). |
+| `make build` | `go build -o api/bin/api` + `npm run build`. |
+
+Run a single Go test: `cd api && go test ./internal/<pkg> -run TestName -v`.
+
+The `docx2md` corpus tests skip cleanly without pandoc + corpus symlinks — see `api/internal/docx2md/README.md` for what to symlink if you need them. Don't add pandoc as a hard dependency for `make test`.
+
+## Code architecture
+
+**The seam pattern is load-bearing.** Every external dependency lives behind an interface in `api/internal/infra/<seam>` (auth, billing, db, queue, repo, storage, observability). Today's SoloMocky impl is the simplest thing that works (e.g., `auth.NewHardcoded`, `queue.NewGoroutine`, `storage.NewLocalFS`, `billing.NewNoop`, `llm.NewAnthropicDirect`). Phase Scaffolding swaps each impl for the real backend (WorkOS, River, Azure Blob, Stripe, Anthropic-via-Foundry) without touching `core/` or `httpapi/`. Don't import concrete impls from `core/` or `httpapi/` — depend on interfaces.
+
+**Run pipeline (`core/reviewrun/orchestrator.go`).** A POST that creates a Matter inserts the matter row + `original` document + a `review_run` row, then `Orchestrator.Dispatch` enqueues a `review_run.execute` job. The handler:
+
+1. Loads the original `.docx` from blob storage, runs `docconv.DocxToMarkdown`, persists a `markdown` documents row.
+2. Calls `Billing.Reserve` (no-op today), builds the Prefix (`reviewrun.BuildPrefix`), stores it on the run with token estimate and active vendor.
+3. Pre-creates one `lens_runs` row per Lens in `LensSet` so the FE can render spinners immediately. The current SoloMocky `LensSet` is `entities_v1`, `open_questions_v1`.
+4. Runs the summary call (failures don't fail the run — logged and skipped).
+5. Runs each Lens sequentially, each with `system: PrefixSystem` + `[{prefix, cache_control: ephemeral}, {rendered_lens}]`. Lens output is JSONL — one Finding per line; bad lines are skipped, not fatal.
+6. Commits or rolls back the billing reservation per the Reviewer-v2 90% rule and finalizes the run as `completed` / `partial` / `failed`.
+
+When River replaces the goroutine queue, this whole handler becomes a fan-out — keep that in mind before adding sequential coupling between Lenses.
+
+**Lens templates.** `core/lens.Templates.Load` reads `prompts/<subdir>/<key>.tmpl` and returns the body plus a sha1 of the bytes; that sha1 becomes `lens_template_sha` on the LensRun row, permanently linking a Run to the prompt that produced it. Lens templates are Go `text/template` — `{{/* … */}}` is a comment that gets stripped. Anything you want the model to see has to be outside the comment block (a recent commit fixed schemas being hidden inside `{{/* */}}`).
+
+**Multi-tenant scoping.** Every read in `infra/repo` scopes by `organization_id` from day one — RLS later is belt-and-suspenders, not a retrofit. New repo methods MUST take and apply `org_id`.
+
+**HTTP edge.** chi router in `httpapi/router.go`. `/health` and `/api/health` are public; everything else is wrapped by `authMiddleware` which calls `auth.Provider.Resolve` and stashes the `*auth.Identity` in the context (read with `httpapi.IdentityFrom(ctx)`). Mocky's hardcoded provider returns the seeded Mocky user regardless of the request.
+
+**Frontend.** Plain Vite + React 19 + TS, no router/state-management library yet. `web/src/api.ts` is the single API client; `MatterList.tsx` and `MatterDetail.tsx` are the only screens. Vite dev server proxies to `:8080`.
+
+## Stale notes in the spec docs
+
+The product specs and stack list have drifted from current decisions. When you write or refer to current behavior:
+
+- **Billing is Stripe-only.** The "Orb in front of Stripe" line in the Locked-ish decisions section below is stale. Stripe alone handles subs, meter, grants, and tax.
+- **Helicone runs in dev and staging only.** Production must strip prompt and response bodies — Helicone gets metadata only there.
+
+If a spec contradicts these, flag it; don't silently follow the spec.
 
 ## Locked-ish decisions
 
