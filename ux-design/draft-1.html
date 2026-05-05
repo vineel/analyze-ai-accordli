@@ -815,101 +815,6 @@
     max-width: 64ch;
   }
 
-  /* Section 2 — Catch up your contracts */
-  .catchup-headline {
-    font-weight: 700;
-    font-size: clamp(38px, 5.2vw, 64px);
-    line-height: 1.04;
-    letter-spacing: -0.038em;
-    color: var(--ink);
-    margin-bottom: 64px;
-    max-width: 22ch;
-  }
-
-  .catchup-grid {
-    display: grid;
-    grid-template-columns: 1.1fr 0.9fr;
-    gap: 80px;
-    align-items: start;
-  }
-
-  .catchup-list {
-    list-style: none;
-    counter-reset: zinger;
-    border-top: 1px solid var(--rule);
-  }
-
-  .catchup-list li {
-    counter-increment: zinger;
-    position: relative;
-    padding: 18px 0 18px 56px;
-    border-bottom: 1px solid var(--rule);
-    font-size: 17px;
-    line-height: 1.45;
-    color: var(--ink);
-    font-weight: 500;
-    letter-spacing: -0.005em;
-  }
-
-  .catchup-list li::before {
-    content: counter(zinger, decimal-leading-zero);
-    position: absolute;
-    left: 0;
-    top: 21px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    color: var(--blue);
-    font-weight: 500;
-  }
-
-  .catchup-prose {
-    position: sticky;
-    top: 92px;
-  }
-
-  .catchup-lede {
-    font-size: 19px;
-    line-height: 1.55;
-    color: var(--ink);
-    font-weight: 600;
-    letter-spacing: -0.005em;
-    margin-bottom: 36px;
-  }
-
-  .catchup-may {
-    font-family: 'Instrument Serif', serif;
-    font-style: italic;
-    font-size: clamp(22px, 2.4vw, 30px);
-    line-height: 1.3;
-    color: var(--ink-soft);
-    letter-spacing: -0.005em;
-    margin-bottom: 14px;
-  }
-
-  .catchup-may:last-of-type {
-    margin-bottom: 0;
-  }
-
-  .catchup-closer {
-    margin-top: 40px;
-    padding-top: 32px;
-    border-top: 1px solid var(--rule);
-    font-size: 17px;
-    line-height: 1.65;
-    color: var(--ink);
-  }
-
-  @media (max-width: 1024px) {
-    .catchup-grid { grid-template-columns: 1fr; gap: 56px; }
-    .catchup-prose { position: static; }
-  }
-
-  @media (max-width: 760px) {
-    .catchup-headline { margin-bottom: 40px; }
-    .catchup-list li { padding-left: 44px; font-size: 16px; }
-  }
-
 </style>
 </head>
 <body id="top">
@@ -969,32 +874,26 @@
   </div>
 </section>
 
-<section class="warm" id="exposure">
+<section class="warm">
   <div class="container">
-    <h2 class="catchup-headline">
-      Catch up your contracts.<br>
-      Fix your templates.<br>
-      Protect your clients.
-    </h2>
-    <div class="catchup-grid">
-      <ol class="catchup-list">
-        <li>Does your $100K liability cap survive a 7%-of-revenue AI Act fine?</li>
-        <li>Your no-training clause expires with the contract. The data doesn't.</li>
-        <li>An AI agent signs on your client's behalf. Are they bound?</li>
-        <li>Hallucinated defamation isn't infringement. Your IP indemnity doesn't reach it.</li>
-        <li>AI exclusions hit cyber and E&amp;O policies in 2024. Did anyone update your insurance clause?</li>
-        <li>EU-only storage doesn't mean EU-only inference.</li>
-        <li>There's a foundation model behind the SaaS vendor. Your sub-processor list doesn't list it.</li>
-        <li>When the model behind the product changes overnight, who tells you?</li>
-        <li>California, then the EU, then everyone else &mdash; synthetic content needs a watermark. Whose job is that?</li>
-        <li>Deployer or provider &mdash; under the EU AI Act, which one is your client?</li>
-      </ol>
-      <div class="catchup-prose">
-        <p class="catchup-lede">Ordinary business contracts may now contain exposure that was not obvious when the form was drafted.</p>
-        <p class="catchup-may">The technology product that exploits your MSA may ship next week.</p>
-        <p class="catchup-may">The data you are protecting today may become synthetic (but believable) next month.</p>
-        <p class="catchup-may">The next big court decision may set a precedent that rips up your protection.</p>
-        <p class="catchup-closer">For lawyers, the challenge is not simply using AI to review contracts. The challenge is helping clients understand whether their existing contracts and templates are ready for the business world that AI is creating.</p>
+    <div class="eyebrow">What changes</div>
+    <h2 class="section-title">The risk is not always where the word <em>AI</em> appears.</h2>
+    <p class="section-lede">AI-related issues often surface through familiar provisions: confidentiality, data use, IP ownership, subcontracting, audit rights, indemnity, limitation of liability, security, and compliance.</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">01</div>
+        <h3>AI regulatory exposure</h3>
+        <p>AI-related obligations are developing quickly across jurisdictions, industries, and customer expectations. Accordli Analyze helps surface those questions in the context of the agreement in front of you.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">02</div>
+        <h3>Contract template drift</h3>
+        <p>Many templates were written before AI became part of daily business operations. Others have been updated in fragments, with isolated AI language added without a full interaction review.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">03</div>
+        <h3>Client confidence</h3>
+        <p>Clients want to know whether they can use AI, whether their vendors can use AI, whether their data is protected, and whether their contracts support internal AI policies.</p>
       </div>
     </div>
   </div>
