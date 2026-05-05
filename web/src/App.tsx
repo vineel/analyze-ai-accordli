@@ -1,37 +1,51 @@
 import { useEffect, useState } from "react";
+import "./styles.css";
+import MatterList from "./MatterList";
+import MatterDetail from "./MatterDetail";
 
-type Health = { ok: boolean; version: string };
+// Hash-based router. Two routes: "" (list) and "matters/<id>" (detail).
+function parseHash(): { kind: "list" } | { kind: "detail"; id: string } {
+  const h = window.location.hash.replace(/^#\/?/, "");
+  const m = h.match(/^matters\/([0-9a-f-]+)$/i);
+  if (m) return { kind: "detail", id: m[1] };
+  return { kind: "list" };
+}
 
 export default function App() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [route, setRoute] = useState(parseHash());
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<Health>;
-      })
-      .then(setHealth)
-      .catch((e: Error) => setError(e.message));
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  const navList = () => {
+    window.location.hash = "";
+  };
+  const navDetail = (id: string) => {
+    window.location.hash = `/matters/${id}`;
+  };
+
   return (
-    <main
-      style={{
-        fontFamily: "system-ui, sans-serif",
-        padding: "2rem",
-        maxWidth: "32rem",
-        margin: "0 auto",
-      }}
-    >
-      <h1>SoloMocky</h1>
-      <p>
-        Phase 0 skeleton. The API at <code>/api/health</code> says:
-      </p>
-      {error && <pre style={{ color: "crimson" }}>error: {error}</pre>}
-      {!error && !health && <p>loading…</p>}
-      {health && <pre>{JSON.stringify(health, null, 2)}</pre>}
-    </main>
+    <div className="container">
+      <header className="header">
+        <h1>
+          <a
+            href="#/"
+            style={{ textDecoration: "none", color: "inherit" }}
+            onClick={(e) => {
+              e.preventDefault();
+              navList();
+            }}
+          >
+            SoloMocky
+          </a>
+        </h1>
+        <span className="who">mocky@accordli.local · Mocky Org</span>
+      </header>
+      {route.kind === "list" && <MatterList onOpen={navDetail} />}
+      {route.kind === "detail" && <MatterDetail id={route.id} onBack={navList} />}
+    </div>
   );
 }
