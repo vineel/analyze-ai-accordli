@@ -1,0 +1,100 @@
+{
+  "agreement-1": {
+    "demoted": 9,
+    "labels_injected": 7,
+    "labels_skipped": 0,
+    "promoted": 9,
+    "title_to_h1": 1
+  },
+  "agreement-10": {
+    "demoted": 0,
+    "labels_injected": 133,
+    "labels_skipped": 0,
+    "promoted": 1,
+    "title_to_h1": 0
+  },
+  "agreement-11": {
+    "demoted": 20,
+    "labels_injected": 25,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-12": {
+    "demoted": 0,
+    "labels_injected": 0,
+    "labels_skipped": 0,
+    "promoted": 10,
+    "title_to_h1": 0
+  },
+  "agreement-13": {
+    "demoted": 0,
+    "labels_injected": 92,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-14": {
+    "demoted": 9,
+    "labels_injected": 7,
+    "labels_skipped": 0,
+    "promoted": 9,
+    "title_to_h1": 1
+  },
+  "agreement-2": {
+    "demoted": 0,
+    "labels_injected": 125,
+    "labels_skipped": 0,
+    "promoted": 6,
+    "title_to_h1": 0
+  },
+  "agreement-3": {
+    "demoted": 0,
+    "labels_injected": 92,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-4": {
+    "demoted": 0,
+    "labels_injected": 92,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-5": {
+    "demoted": 4,
+    "labels_injected": 17,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-6": {
+    "demoted": 3,
+    "labels_injected": 40,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-7": {
+    "demoted": 2,
+    "labels_injected": 14,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  },
+  "agreement-8": {
+    "demoted": 2,
+    "labels_injected": 16,
+    "labels_skipped": 0,
+    "promoted": 1,
+    "title_to_h1": 0
+  },
+  "agreement-9": {
+    "demoted": 0,
+    "labels_injected": 11,
+    "labels_skipped": 0,
+    "promoted": 0,
+    "title_to_h1": 0
+  }
+}

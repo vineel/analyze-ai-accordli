@@ -31,6 +31,10 @@ coverage.out
 # Local file storage seam
 /var/
 
+# docx2md test artifacts (generated; corpus is symlinked, never committed)
+/api/internal/docx2md/testdata/_actual/
+/api/internal/docx2md/testdata/corpus/agreement-*
+
 # Logs
 *.log
 
