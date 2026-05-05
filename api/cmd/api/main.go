@@ -12,11 +12,18 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"accordli.com/analyze-ai/api/internal/core/docconv"
+	"accordli.com/analyze-ai/api/internal/core/lens"
+	"accordli.com/analyze-ai/api/internal/core/llm"
+	"accordli.com/analyze-ai/api/internal/core/reviewrun"
 	"accordli.com/analyze-ai/api/internal/httpapi"
 	"accordli.com/analyze-ai/api/internal/infra/auth"
+	"accordli.com/analyze-ai/api/internal/infra/billing"
 	"accordli.com/analyze-ai/api/internal/infra/db"
 	"accordli.com/analyze-ai/api/internal/infra/observability"
+	"accordli.com/analyze-ai/api/internal/infra/queue"
 	"accordli.com/analyze-ai/api/internal/infra/repo"
+	"accordli.com/analyze-ai/api/internal/infra/storage"
 	"accordli.com/analyze-ai/api/internal/solomocky"
 )
 
@@ -59,10 +66,35 @@ func main() {
 		solomocky.UserID, solomocky.OrgID, solomocky.DeptID, solomocky.UserEmail,
 	)
 
+	// Seam impls. SoloMocky-flavored today; Phase Scaffolding swaps each
+	// for the real backend behind the same interface.
+	blob := storage.NewLocalFS(resolveVarBlobRoot())
+	q := queue.NewGoroutine()
+	reserver := billing.NewNoop()
+
+	llmClient := llm.NewAnthropicDirect(os.Getenv("ANTHRO_API_KEY"), "")
+	templates := &lens.Templates{Root: resolvePromptsRoot()}
+
+	orchestrator := &reviewrun.Orchestrator{
+		Repos:     repos,
+		LLM:       llmClient,
+		Templates: templates,
+		Billing:   reserver,
+		Convert:   docconv.New(),
+		Log:       logger,
+	}
+	q.Register(reviewrun.JobKind, orchestrator.Handler)
+
 	deps := &httpapi.Deps{
-		Auth:    authProvider,
-		Log:     logger,
-		Repos:   repos,
+		Auth:  authProvider,
+		Log:   logger,
+		Repos: repos,
+		Matters: &httpapi.MattersDeps{
+			Repos:        repos,
+			Blob:         blob,
+			Queue:        q,
+			Orchestrator: orchestrator,
+		},
 		Version: gitSHA(),
 	}
 	handler := httpapi.NewRouter(deps)
@@ -92,6 +124,61 @@ func loadEnvFile() {
 			return
 		}
 	}
+}
+
+// resolvePromptsRoot finds /prompts at the repo root from any cwd
+// (`go run` from /api, binary from the repo root, `go test` from a
+// subpkg). Same upward-walk pattern as solomocky.LoadSampleDocx.
+func resolvePromptsRoot() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "prompts"
+	}
+	dir := cwd
+	for i := 0; i < 8; i++ {
+		candidate := dir + string(os.PathSeparator) + "prompts"
+		if st, err := os.Stat(candidate); err == nil && st.IsDir() {
+			return candidate
+		}
+		parent := parentDir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "prompts"
+}
+
+func resolveVarBlobRoot() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "var/blob"
+	}
+	dir := cwd
+	for i := 0; i < 8; i++ {
+		// Look for the repo root marker (`.git` or `Makefile`).
+		if _, err := os.Stat(dir + string(os.PathSeparator) + ".git"); err == nil {
+			return dir + string(os.PathSeparator) + "var" + string(os.PathSeparator) + "blob"
+		}
+		parent := parentDir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "var/blob"
+}
+
+func parentDir(p string) string {
+	for i := len(p) - 1; i >= 0; i-- {
+		if p[i] == os.PathSeparator {
+			if i == 0 {
+				return string(os.PathSeparator)
+			}
+			return p[:i]
+		}
+	}
+	return p
 }
 
 // gitSHA returns the build-stamped VCS revision, or "dev" when running

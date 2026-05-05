@@ -21,6 +21,7 @@ type Deps struct {
 	Auth    auth.Provider
 	Log     observability.Logger
 	Repos   *repo.Repos
+	Matters *MattersDeps
 	Version string // git SHA, surfaced by /health
 }
 
@@ -55,10 +56,12 @@ func NewRouter(d *Deps) http.Handler {
 	r.Get("/health", d.healthHandler)
 	r.Get("/api/health", d.healthHandler)
 
-	// Authenticated. Empty in Phase 0; later phases mount real routes.
+	// Authenticated routes.
 	r.Group(func(r chi.Router) {
 		r.Use(d.authMiddleware)
-		// r.Mount("/api/matters", ...)
+		if d.Matters != nil {
+			d.mountMatters(r)
+		}
 	})
 
 	return r
