@@ -76,11 +76,15 @@ The actual product/price/meter fixtures are Phase 5 work — **don't create thos
 
 ### A4. Helicone dev project — non-blocking, lands with Phase 4
 
+**Vineel: Defering this until we need it.**
+
 1. <https://helicone.ai> → sign up; create a workspace/team for Accordli; invite Tom.
 2. Project: `accordli-dev` (separate from a future `accordli-staging` and `accordli-prod`).
 3. API key into each dev's `.env` as `HELICONE_API_KEY`.
 
 ### A5. PostHog dev project — non-blocking, lands with Phase 6
+
+**Vineel: Defering this until we need it.**
 
 1. <https://posthog.com> → US Cloud (per Locked-ish decisions).
 2. Project: `accordli-dev`.
@@ -106,8 +110,8 @@ Capture this in 1Password (or whatever the password store ends up being) once th
 | Tailscale     | Vineel        | tail9acde7        | —            | machine login |
 | WorkOS        | Vineel        | Staging           | api+client   | webhook sig   |
 | Stripe        | Vineel        | Test mode         | sk_test, pk_test | wh sig (CLI or endpoint) |
-| Helicone      | Vineel        | accordli-dev      | api key      | —             |
-| PostHog       | Vineel        | accordli-dev      | project key  | —             |
+| Helicone (defer) | Vineel        | accordli-dev      | api key      | —             |
+| PostHog (defer) | Vineel        | accordli-dev      | project key  | —             |
 | Postmark      | Vineel        | sandbox server    | server token | —             |
 | Anthropic     | Vineel        | (current key)     | api key      | —             |
 
