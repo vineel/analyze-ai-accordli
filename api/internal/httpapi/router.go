@@ -56,6 +56,11 @@ func NewRouter(d *Deps) http.Handler {
 	r.Get("/health", d.healthHandler)
 	r.Get("/api/health", d.healthHandler)
 
+	// Webhook placeholders (Phase 0). Public; no signature verification yet
+	// — Phase 1 (WorkOS) and Phase 5 (Stripe) replace these handlers.
+	r.Post("/webhooks/stripe", d.stripeWebhookPlaceholder)
+	r.Post("/webhooks/workos", d.workosWebhookPlaceholder)
+
 	// Authenticated routes.
 	r.Group(func(r chi.Router) {
 		r.Use(d.authMiddleware)

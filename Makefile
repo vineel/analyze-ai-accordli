@@ -1,8 +1,12 @@
 # SoloMocky Makefile.
 #
 # DATABASE_URL comes from .env (loaded by the API at runtime). For Make
-# targets that talk to Postgres directly (goose, reset_db.sh), we export
-# .env into the shell.
+# targets that talk to Postgres directly (reset_db.sh) we export .env into
+# the shell so they pick up DATABASE_URL too.
+#
+# No goose / migrations targets while we're pre-prod (per CLAUDE.md "Database
+# preferences"). `make reset` rebuilds from db/schema.sql; that's the only
+# path for schema changes until Phase 8.
 
 SHELL := /bin/bash
 
@@ -12,13 +16,20 @@ include $(ENV_FILE)
 export
 endif
 
-GOOSE := go run github.com/pressly/goose/v3/cmd/goose@v3.22.1
-MIGRATIONS_DIR := db/migrations
+API_HEALTH_URL := http://localhost:8080/api/health
+WEB_URL        := http://localhost:5173
 
-.PHONY: dev dev-api dev-web migrate migrate-down reset seed test lint build tidy
+.PHONY: dev dev-api dev-web reset seed test lint build tunnel tidy
 
 dev:
 	@command -v npx >/dev/null || { echo "node/npx not found" >&2; exit 1; }
+	@echo "API     -> $(API_HEALTH_URL)"
+	@echo "Web     -> $(WEB_URL)"
+	@if [[ -n "$$TUNNEL_HOSTNAME" ]]; then \
+	  echo "Tunnel  -> https://$$TUNNEL_HOSTNAME (run 'make tunnel' separately)"; \
+	else \
+	  echo "Tunnel  -> set TUNNEL_HOSTNAME in .env to enable 'make tunnel'"; \
+	fi
 	@( cd api && go run ./cmd/api ) & \
 	  ( cd web && npm run dev ) ; \
 	  wait
@@ -29,15 +40,9 @@ dev-api:
 dev-web:
 	cd web && npm run dev
 
-migrate:
-	$(GOOSE) -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" up
-
-migrate-down:
-	$(GOOSE) -dir $(MIGRATIONS_DIR) postgres "$(DATABASE_URL)" down
-
 reset:
 	./scripts/reset_db.sh
-	$(MAKE) migrate
+	$(MAKE) seed
 
 seed:
 	./scripts/seed.sh
@@ -53,6 +58,22 @@ build:
 	mkdir -p api/bin
 	cd api && go build -o bin/api ./cmd/api
 	cd web && npm run build
+
+# Expose this developer's local API to the public internet via Tailscale
+# Funnel. One-time setup (sign in to the Accordli tailnet, rename the
+# machine, set TUNNEL_HOSTNAME) is documented in
+# notes/claude-code-artifacts/phase-0-kickoff.md §A1.
+#
+# `--bg` makes the funnel persist across reboots and detach from this
+# shell. To take it down: `sudo tailscale funnel --bg off`.
+tunnel:
+	@command -v tailscale >/dev/null || { echo "tailscale not installed (App Store or 'brew install --cask tailscale')" >&2; exit 1; }
+	@if [[ -n "$$TUNNEL_HOSTNAME" ]]; then \
+	  echo "Tunnel: https://$$TUNNEL_HOSTNAME -> http://localhost:8080"; \
+	else \
+	  echo "Tunnel: https://<your-machine>.<tailnet>.ts.net -> http://localhost:8080 (set TUNNEL_HOSTNAME in .env to suppress this hint)"; \
+	fi
+	sudo tailscale funnel --bg 8080
 
 tidy:
 	cd api && go mod tidy
