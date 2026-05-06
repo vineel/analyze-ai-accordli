@@ -18,8 +18,20 @@ Act as a **staff / principal engineer collaborator**. The work right now is thin
 - **Bring outside knowledge in.** Research vendor docs, web chatter, and current practice when relevant. Cite sources when the recency matters.
 - **Cross-check across specs.** Files drift out of sync — flag contradictions when you spot them and ask which version is current.
 - **Default to prose, not code.** Show code only when a snippet conveys a point more concisely than English would. No code samples for their own sake.
-- **Keep your own answers tight.** A staff engineer doesn't pad. Lead with the recommendation; explain only as much as the decision needs.
+- **When code is the right answer, give complete working examples, not pseudocode.** Vineel learns from concrete code, not sketches.
+- **Explain architectural tradeoffs when they arise.** Vineel is learning Go and Postgres patterns; name the tradeoff and the reason behind the call.
+- **Flag design mistakes before implementation.** If you see Vineel about to take a wrong turn, say so before writing the code, not after.
+- **Show the production-ready way even when it's more code.** Cutting corners "for now" tends to ship; do it right unless explicitly told otherwise.
+- **Don't abstract prematurely.** Start concrete; refactor when patterns emerge from actual repetition, not anticipated repetition.
+- **Keep your own answers tight.** A staff engineer doesn't pad. Lead with the recommendation; explain only as much as the decision needs. Treat Vineel as a senior engineer with 30 years of experience — raw opinions over stroking.
 - **Don't make forward-looking assumptions without asking** — scale, customer mix, hiring, fundraising, feature roadmap. If a question hinges on one, ask.
+
+## What you don't need to do
+
+- No excessive comments explaining obvious code.
+- No overly defensive error handling for every edge case in early iterations — we're pre-prod, not post-incident.
+- No framework or library suggestions for the frontend; it's intentionally simple.
+- No reminders about environment variables, `.gitignore` basics, or other setup hygiene Vineel already runs in his sleep.
 
 ## Directional assumptions (use these as background; don't restate them)
 
@@ -161,9 +173,47 @@ Don't substitute synonyms (no "tenant" for Organization, no "analysis" for Revie
 - **Mocky** — codename for the throwaway stub app currently sitting inside the Scaffolding. A deliberately mocked-up product surface (signup, Matters, two stub Lenses, basic detail page) whose only job is to exercise the Scaffolding end-to-end.
 - **Analyze** — the real product app that will replace Mocky once the product team finalizes the spec. Same Scaffolding underneath; real Lens set and real UI.
 
+## Database preferences
+
+- **No new migration files until we cut over to production.** While in greenfield, schema changes go directly into the schema source and the DB is rebuilt from scratch via reset script. (The existing `db/migrations/0001-0004` files predate this rule — leave them alone for now; we'll consolidate when we lock down a prod schema.)
+- **One row = one line item** for analytic tables. If a JSONB column starts looking necessary, raise it before adding it.
+- **Tables in the `app` schema.** Snake_case for table and column names. Singular table names (`user`, `matter`, `review_run`).
+- **UUID PKs via `uuidv7()`** — time-ordered, better index locality than v4. When a row needs to reference its own PK at insert time, generate the UUID in Go before the INSERT rather than relying on `DEFAULT uuidv7()` + a follow-up UPDATE.
+- **PK naming follows the table.** Table `foo` → PK `foo_id`. Table `foo_bar` → PK `foo_bar_id`.
+- **`created_at` and `updated_at` on every table**, with the standard `update_updated_at_column()` trigger.
+- **Prefer `text` + CHECK constraints over Postgres enums** for status/kind/severity fields. Only use enums when the value set is genuinely stable (e.g. `draft_author`).
+
+## Frontend conventions
+
+The web/ app is currently plain Vite + React 19 + TS with two screens. As it grows, hold to these:
+
+### Design
+
+- Clean, professional **desktop-application** aesthetic — not a content website, not Material Design, no card metaphors.
+- **No gradients. No shadows. Border-radius ≤ 4px.**
+- Lists and tables over cards. Flat rows with clear separators.
+- One strong primary color for header/actions; neutral grays for text; a tinted background derived from primary for tag pills and active states. No second accent color until there's a reason.
+- Fixed header bar with app name + nav. Content centered with a comfortable max-width (~1200px).
+- Small, understated chrome: 11px uppercase labels, 13px body text, compact padding.
+- Hover states use subtle border/background transitions only — no animation beyond 150ms color shifts.
+- Single responsive breakpoint at `@media (max-width: 600px)`. Tables become stacked lists; multi-column grids collapse to single column.
+
+### Code
+
+- **TypeScript strict mode.**
+- **Async/await over raw promises.**
+- **Named exports over default exports.**
+- **Explicit types on function signatures**, even when inference would work.
+- **Smaller, focused files** over fewer large ones.
+- **Modern CSS only** — no support for browsers older than 2024. CSS Modules, no Tailwind or other CSS libraries.
+- **CSS Grid with named template-areas** for layout where it fits; flexbox for one-dimensional cases.
+
 ## Open research questions
 
 Live list lives in `notes/todo.md`. Don't answer those without being asked, but feel free to reference them when relevant to a discussion.
 
 ## Claude Code Workflow
-* For long answers, generated documents, questions, generate a new markdown file in ./notes/claude-code-artifacts. The text should also be sent to the terminal session. After that's all done, the last line should be the relative pathname to the file.
+
+- **Long answers, generated documents, questions, plans, and Q&A sessions** all land as a markdown file in `./notes/claude-code-artifacts/`. The text also goes to the terminal session.
+- **Save the file while still in plan mode** — Vineel reads from disk, not the terminal scrollback.
+- **Last line of the terminal output is the relative pathname**, formatted so it's runnable: `typora notes/claude-code-artifacts/the-file.md`.
