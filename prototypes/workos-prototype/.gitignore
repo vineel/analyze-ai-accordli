@@ -1,0 +1,6 @@
+.env
+be/be
+be/api
+fe/node_modules
+fe/dist
+.DS_Store
