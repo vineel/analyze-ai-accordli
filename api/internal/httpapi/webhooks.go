@@ -2,7 +2,7 @@
 //
 // Public, unauthenticated endpoints whose only job is to satisfy the Phase 0
 // exit criterion: prove that a Stripe or WorkOS test event sent at our
-// Cloudflare Tunnel hostname actually reaches the API. They read the body,
+// Tailscale Funnel hostname actually reaches the API. They read the body,
 // log size + a few headers, and return 200.
 //
 // They do NOT verify signatures yet. Phase 1 wires real verification on

@@ -46,7 +46,7 @@ make tunnel    # sudo tailscale funnel --bg 8080
 | `make dev-api` / `make dev-web` | One side only. |
 | `make reset` | Drop + recreate `solomocky_dev`, apply `db/schema.sql`, seed. |
 | `make seed` | Re-seed the Mocky org/user (also runs at API startup). |
-| `make tunnel` | Bring up the per-developer Cloudflare Tunnel. |
+| `make tunnel` | Expose local API via Tailscale Funnel (`sudo tailscale funnel --bg 8080`). |
 | `make test` | `go test ./...`. |
 | `make lint` | `go vet` + `tsc --noEmit`. |
 | `make build` | API binary + FE bundle. |
